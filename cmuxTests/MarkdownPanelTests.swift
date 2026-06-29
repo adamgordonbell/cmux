@@ -436,6 +436,7 @@ final class MarkdownPanelTests: XCTestCase {
             fontFamily: MarkdownFontFamily.systemDefault,
             maxContentWidth: MarkdownMaxWidthSettings.defaultCSSPixels,
             session: session,
+            isVisibleInUI: true,
             onRequestPanelFocus: {}
         )
         let firstCoordinator = firstRenderer.makeCoordinator()
@@ -452,6 +453,7 @@ final class MarkdownPanelTests: XCTestCase {
             fontFamily: MarkdownFontFamily.systemDefault,
             maxContentWidth: MarkdownMaxWidthSettings.defaultCSSPixels,
             session: session,
+            isVisibleInUI: true,
             onRequestPanelFocus: {}
         )
         let recreatedCoordinator = recreatedRenderer.makeCoordinator()
