@@ -20,6 +20,10 @@ struct MarkdownWebRenderer: NSViewRepresentable {
     /// Maximum content column width, in CSS pixels.
     let maxContentWidth: Double
     let session: MarkdownRendererSession
+    /// Whether this panel is the front/selected surface in its pane. Used to
+    /// re-host the WKWebView's remote layer when a background tab is revealed
+    /// (see `Coordinator.setVisible`).
+    let isVisibleInUI: Bool
     let onRequestPanelFocus: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -104,6 +108,7 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         context.coordinator.setFontFamily(fontFamily)
         context.coordinator.setMaxContentWidth(maxContentWidth)
         context.coordinator.update(markdown: markdown, theme: theme)
+        context.coordinator.setVisible(isVisibleInUI)
     }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
@@ -151,6 +156,10 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         private var lastMaxContentWidth: Double = MarkdownMaxWidthSettings.defaultCSSPixels
         private var isLoaded = false
         private var isShellLoading = false
+        /// Tracks the last visibility we saw so `setVisible` can act only on the
+        /// background→front transition. `nil` = never reported yet.
+        private var lastVisible: Bool? = nil
+        private var pendingReattach = false
         private var webContentProcessRecoveryAttempts = 0
         private let maxWebContentProcessRecoveryAttempts = 2
         /// Whether the shell was confirmed loaded at the moment the host view
@@ -191,6 +200,56 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             self.panelId = panelId
             self.workspaceId = workspaceId
             self.filePath = filePath
+        }
+
+        /// Re-establish WebKit's remote layer hosting when a background tab is
+        /// revealed.
+        ///
+        /// When a markdown surface first loads while it is NOT the front tab in
+        /// its pane, the WKWebView composites into a layer that never gets
+        /// hosted in the visible window. Revealing the tab (SwiftUI flips
+        /// opacity/visibility) does not reattach that layer, so the preview
+        /// stays blank. A pane *resize* doesn't fix it either — a bounds change
+        /// fires neither `viewDidMoveToWindow` nor `viewDidMoveToSuperview`,
+        /// which are what actually rehost the remote layer. The only user
+        /// action that fixed it was moving the surface to a new tab, because
+        /// that runs `removeFromSuperview()` + re-add.
+        ///
+        /// So on the background→front transition we replicate exactly that
+        /// lifecycle: detach the webView from its superview and re-add it at the
+        /// same z-position. Deferred to the next runloop so we never mutate the
+        /// view tree from inside a SwiftUI `updateNSView` pass.
+        func setVisible(_ visible: Bool) {
+            defer { lastVisible = visible }
+            // Only act on a real background→front transition. First-ever report
+            // (lastVisible == nil) is the initial mount and needs no nudge.
+            guard visible, lastVisible == false else { return }
+            scheduleReattach()
+        }
+
+        private func scheduleReattach() {
+            guard !pendingReattach else { return }
+            pendingReattach = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.pendingReattach = false
+                self.reattachWebViewLayer()
+            }
+        }
+
+        private func reattachWebViewLayer() {
+            guard let webView, let superview = webView.superview, webView.window != nil else { return }
+            let index = superview.subviews.firstIndex(of: webView)
+            let below = (index != nil && index! > 0) ? superview.subviews[index! - 1] : nil
+            webView.removeFromSuperview()
+            // Re-add at (approximately) the original z-position. SwiftUI returns
+            // the webView directly from makeNSView, so re-parenting under the
+            // same superview keeps its layout constraints/autoresizing intact.
+            if let below {
+                superview.addSubview(webView, positioned: .above, relativeTo: below)
+            } else {
+                superview.addSubview(webView, positioned: .below, relativeTo: nil)
+            }
         }
 
         /// Records the desired body font size and applies it as `pageZoom`.
@@ -265,6 +324,8 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             self.webView = nil
             isLoaded = false
             isShellLoading = false
+            lastVisible = nil
+            pendingReattach = false
             webContentProcessRecoveryAttempts = 0
             shellWasHealthyWhenDetached = false
             cancelImageLoads()
