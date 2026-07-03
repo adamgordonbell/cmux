@@ -14,8 +14,9 @@ public enum ControlMarkdownOpenResolution: Sendable, Equatable {
         public let targetPaneID: UUID?
         /// The created markdown panel.
         public let surfaceID: UUID
-        /// The split's source surface.
-        public let sourceSurfaceID: UUID
+        /// The split's source surface, if the panel was created by splitting
+        /// (absent when opened directly into an existing pane via `pane_id`).
+        public let sourceSurfaceID: UUID?
         /// The source surface's pane, if it resolved.
         public let sourcePaneID: UUID?
 
@@ -33,7 +34,7 @@ public enum ControlMarkdownOpenResolution: Sendable, Equatable {
             workspaceID: UUID,
             targetPaneID: UUID?,
             surfaceID: UUID,
-            sourceSurfaceID: UUID,
+            sourceSurfaceID: UUID?,
             sourcePaneID: UUID?
         ) {
             self.windowID = windowID
@@ -51,6 +52,8 @@ public enum ControlMarkdownOpenResolution: Sendable, Equatable {
     case noFocusedSurface
     /// The targeted source surface is not in the workspace.
     case sourceSurfaceNotFound(UUID)
+    /// The targeted `pane_id` is not in the workspace.
+    case paneNotFound(UUID)
     /// The `direction` param did not parse.
     case invalidDirection
     /// The `font_size` param was present but non-numeric.
