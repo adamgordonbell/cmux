@@ -20,6 +20,16 @@ struct MarkdownWebRenderer: NSViewRepresentable {
     /// Maximum content column width, in CSS pixels.
     let maxContentWidth: Double
     let session: MarkdownRendererSession
+    /// Whether this renderer is the layer actually shown (tab selected in its
+    /// pane, preview mode). Drives the orphaned-webview watchdog: a *visible*
+    /// panel whose webview has no window is a hosting failure, whereas a
+    /// hidden tab's webview legitimately leaves the window (SwiftUI culls
+    /// zero-opacity platform views).
+    let isVisibleInUI: Bool
+    /// Asks the hosting SwiftUI view to rebuild this representable (bump its
+    /// `.id`), which re-runs `makeNSView` and re-adopts the session-retained
+    /// webview into a live host. The recovery for an orphaned webview.
+    let onRequestRehost: () -> Void
     let onRequestPanelFocus: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -104,6 +114,8 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         context.coordinator.setFontFamily(fontFamily)
         context.coordinator.setMaxContentWidth(maxContentWidth)
         context.coordinator.update(markdown: markdown, theme: theme)
+        context.coordinator.onRequestRehost = onRequestRehost
+        context.coordinator.setVisible(isVisibleInUI)
     }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
@@ -274,8 +286,65 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             webContentProcessRecoveryAttempts = 0
             shellWasHealthyWhenDetached = false
             shellWasLoadingWhenDetached = false
+            lastVisible = nil
+            rehostAttempts = 0
+            onRequestRehost = nil
             cancelImageLoads()
             requestedLibs.removeAll()
+        }
+
+        /// Incremented per loadShell so a stalled-load watchdog can tell
+        /// whether the load it was armed for is still the current one.
+        private var loadGeneration = 0
+        /// Set by the hosting view; rebuilds the representable so makeNSView
+        /// re-adopts the webview into a live host (orphan recovery).
+        var onRequestRehost: (() -> Void)?
+        /// Last shown-state reported by the hosting view.
+        private var lastVisible: Bool? = nil
+        /// Rehost attempts for the current orphan episode; reset when the
+        /// webview is observed back in a window. Caps SwiftUI-rebuild requests
+        /// so a pathological hosting failure cannot loop forever.
+        private var rehostAttempts = 0
+        private let maxRehostAttempts = 3
+
+        /// Reported from `updateNSView`. On a hidden→shown transition, arm the
+        /// orphan watchdog: if the webview still has no window shortly after
+        /// becoming the visible layer, hosting failed and we request a rehost.
+        func setVisible(_ visible: Bool) {
+            defer { lastVisible = visible }
+            guard visible, lastVisible != true else { return }
+            armOrphanWatchdog(delay: 0.7)
+        }
+
+        /// A *visible* markdown panel whose webview is not in any window is a
+        /// hosting failure. It happens when a surface is moved between panes
+        /// (mdtab's open-then-move, manual drags): the collapsing source pane
+        /// and the adopting destination pane race, and the session-retained
+        /// webview can end up outside the hierarchy with `viewDidMoveToWindow`
+        /// never firing again — so no window-event-based recovery can see it.
+        /// SwiftUI's own updates won't re-add it either (the host believes it
+        /// is already hosting the view). The only repair is to rebuild the
+        /// representable via `onRequestRehost` so `makeNSView` re-adopts the
+        /// webview — the programmatic equivalent of the "drag the tab to
+        /// another pane" folk fix.
+        private func armOrphanWatchdog(delay: TimeInterval) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let webView = self.webView else { return }
+                guard self.lastVisible == true else { return }
+                if webView.window != nil {
+                    self.rehostAttempts = 0
+                    return
+                }
+                guard self.rehostAttempts < self.maxRehostAttempts else { return }
+                self.rehostAttempts += 1
+#if DEBUG
+                NSLog("MarkdownPanel.orphanWatchdog rehost attempt=\(self.rehostAttempts) filePath=\(self.filePath)")
+#endif
+                self.onRequestRehost?()
+                // Re-check: either the rehost landed (window != nil resets the
+                // counter) or we escalate up to the attempt cap.
+                self.armOrphanWatchdog(delay: 1.0)
+            }
         }
 
         func loadShell(theme: MarkdownWebTheme, initialMarkdown: String) {
@@ -285,12 +354,61 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             requestedLibs.removeAll()
             isLoaded = false
             isShellLoading = true
+            loadGeneration += 1
             let html = MarkdownViewerAssets.shared.shellHTML(isDark: theme.isDark)
             let baseURL = URL(fileURLWithPath: filePath)
 #if DEBUG
             NSLog("MarkdownPanel.loadShell filePath=\(filePath) baseURL=\(baseURL.absoluteString) htmlBytes=\(html.utf8.count)")
 #endif
             webView?.loadHTMLString(html, baseURL: baseURL)
+            armStalledLoadWatchdog(generation: loadGeneration, attempt: 0)
+        }
+
+        /// A shell load can die silently when its view is reparented mid-load:
+        /// the surface is moved to another pane, the collapsing split tears the
+        /// old host down, and the retained webview can end up outside any
+        /// window with `didFinish` never arriving — and, in the worst case,
+        /// `viewDidMoveToWindow` never firing again, so the re-entry recovery
+        /// path cannot see it. This watchdog is the recovery of last resort:
+        /// it polls after a load starts and, if the load is still not finished,
+        /// reloads once the view is back in a window (a reload while detached
+        /// would just stall again).
+        private func armStalledLoadWatchdog(generation: Int, attempt: Int) {
+            let maxAttempts = 5
+            guard attempt < maxAttempts else { return }
+#if DEBUG
+            NSLog("MarkdownPanel.stalledLoadWatchdog armed gen=\(generation) attempt=\(attempt) filePath=\(filePath)")
+#endif
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+#if DEBUG
+                NSLog("MarkdownPanel.stalledLoadWatchdog check gen=\(generation) attempt=\(attempt) self=\(self != nil ? 1 : 0) curGen=\(self?.loadGeneration ?? -1) isLoaded=\(String(describing: self?.isLoaded)) isShellLoading=\(String(describing: self?.isShellLoading)) webView=\(self?.webView != nil ? 1 : 0) window=\(self?.webView?.window != nil ? 1 : 0) filePath=\(self?.filePath ?? "?")")
+#endif
+                guard let self,
+                      self.loadGeneration == generation,
+                      !self.isLoaded,
+                      // Only a load still (nominally) in flight is a stall. A
+                      // crash is handled by webViewWebContentProcessDidTerminate,
+                      // which clears isShellLoading — so an exhausted crash-loop
+                      // budget can never be relaunched from here.
+                      self.isShellLoading,
+                      let webView = self.webView else { return }
+                guard webView.window != nil else {
+                    // Not in a window: a reload can't complete. Keep watching —
+                    // if the view is ever re-hosted we recover then.
+#if DEBUG
+                    NSLog("MarkdownPanel.stalledLoadWatchdog gen=\(generation) attempt=\(attempt) detached, rescheduling filePath=\(self.filePath)")
+#endif
+                    self.armStalledLoadWatchdog(generation: generation, attempt: attempt + 1)
+                    return
+                }
+#if DEBUG
+                NSLog("MarkdownPanel.stalledLoadWatchdog gen=\(generation) attempt=\(attempt) reloading stalled shell filePath=\(self.filePath)")
+#endif
+                self.loadShell(
+                    theme: self.lastTheme ?? self.pendingTheme,
+                    initialMarkdown: self.lastMarkdown ?? self.pendingMarkdown
+                )
+            }
         }
 
         func update(markdown: String, theme: MarkdownWebTheme) {
@@ -799,6 +917,14 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             // loop cannot launder a fresh budget through reparenting.
             shellWasLoadingWhenDetached = isShellLoading
                 && webContentProcessRecoveryAttempts < maxWebContentProcessRecoveryAttempts
+            // A visible panel's webview leaving the window is either a
+            // transient reparent (re-entry follows and recovery runs there) or
+            // the start of an orphan (re-entry never comes). Arm the orphan
+            // watchdog to distinguish: if the view is still windowless while
+            // visible shortly after, request a SwiftUI rehost.
+            if lastVisible == true {
+                armOrphanWatchdog(delay: 1.0)
+            }
         }
 
         func handleViewReenteredWindow() {
