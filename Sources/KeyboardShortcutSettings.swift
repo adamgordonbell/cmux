@@ -111,6 +111,7 @@ enum KeyboardShortcutSettings {
         case nukeWorkspace
         case banishWorkspace
         case unbanishAllWorkspaces
+        case toggleHotkeyLegend
         case renameTab
         case renameWorkspace
         case editWorkspaceDescription
@@ -238,6 +239,7 @@ enum KeyboardShortcutSettings {
             case .nukeWorkspace: return String(localized: "shortcut.nukeWorkspace.label", defaultValue: "Nuke Focused Workspace")
             case .banishWorkspace: return String(localized: "shortcut.banishWorkspace.label", defaultValue: "Banish Focused Workspace")
             case .unbanishAllWorkspaces: return String(localized: "shortcut.unbanishAllWorkspaces.label", defaultValue: "Unbanish All Workspaces")
+            case .toggleHotkeyLegend: return String(localized: "shortcut.toggleHotkeyLegend.label", defaultValue: "Toggle Hotkey Legend")
             case .renameTab: return String(localized: "shortcut.renameTab.label", defaultValue: "Rename Tab")
             case .renameWorkspace: return String(localized: "shortcut.renameWorkspace.label", defaultValue: "Rename Workspace")
             case .editWorkspaceDescription: return String(localized: "shortcut.editWorkspaceDescription.label", defaultValue: "Edit Workspace Description")
@@ -515,6 +517,8 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "b", command: true, shift: true, option: false, control: false)
             case .unbanishAllWorkspaces:
                 return StoredShortcut(key: "u", command: true, shift: true, option: false, control: false)
+            case .toggleHotkeyLegend:
+                return StoredShortcut(key: "/", command: true, shift: false, option: false, control: false)
             case .toggleRightSidebar:
                 return StoredShortcut(key: "b", command: true, shift: false, option: true, control: false)
             case .fileExplorerOpenSelection:
