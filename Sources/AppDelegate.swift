@@ -13753,6 +13753,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
                 return true
             }
+            if matchConfiguredShortcut(event: event, action: .toggleHotkeyLegend) {
+                HotkeyLegendState.shared.toggle()
+                return true
+            }
         }
 
         // Numeric shortcuts for specific workspaces (9 = last workspace)
