@@ -242,6 +242,24 @@ extension CmuxEventBus {
         )
     }
 
+    /// A markdown surface's WKWebView shell finished loading and the markdown
+    /// payload was pushed — the panel is rendered (or about to paint). Fires
+    /// again after shell reloads (e.g. crash recovery or reattach).
+    func publishMarkdownRendered(workspaceId: UUID, surfaceId: UUID, filePath: String) {
+        publish(
+            name: "markdown.rendered",
+            category: "surface",
+            source: "markdown.renderer",
+            workspaceId: workspaceId.uuidString,
+            surfaceId: surfaceId.uuidString,
+            paneId: nil,
+            payload: [
+                "surface_id": surfaceId.uuidString,
+                "path": filePath
+            ]
+        )
+    }
+
     func publishSurfaceClosed(workspaceId: UUID, surfaceId: UUID, paneId: UUID?, kind: String?, origin: String) {
         publish(
             name: "surface.closed",
