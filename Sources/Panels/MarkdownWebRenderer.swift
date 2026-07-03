@@ -227,6 +227,11 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         /// view tree from inside a SwiftUI `updateNSView` pass.
         func setVisible(_ visible: Bool) {
             defer { lastVisible = visible }
+#if DEBUG
+            if lastVisible != visible {
+                NSLog("MarkdownPanel.setVisible visible=\(visible) lastVisible=\(String(describing: lastVisible)) filePath=\(filePath)")
+            }
+#endif
             // Only act on a real background→front transition. First-ever report
             // (lastVisible == nil) is the initial mount and needs no nudge.
             guard visible, lastVisible == false else { return }
@@ -244,6 +249,9 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         }
 
         private func reattachWebViewLayer() {
+#if DEBUG
+            NSLog("MarkdownPanel.reattachWebViewLayer webView=\(webView != nil) superview=\(webView?.superview != nil) window=\(webView?.window != nil) filePath=\(filePath)")
+#endif
             guard let webView, let superview = webView.superview, webView.window != nil else { return }
             let index = superview.subviews.firstIndex(of: webView)
             let below = (index != nil && index! > 0) ? superview.subviews[index! - 1] : nil
@@ -831,6 +839,9 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         /// treated as a detach artifact (and recovered with a fresh budget) if
         /// the shell was loaded when it was detached.
         func handleViewLeftWindow() {
+#if DEBUG
+            NSLog("MarkdownPanel.handleViewLeftWindow isLoaded=\(isLoaded) isShellLoading=\(isShellLoading) filePath=\(filePath)")
+#endif
             shellWasHealthyWhenDetached = isLoaded
             // A load still in flight at detach time is also recoverable: the
             // shell never got a chance to become healthy (e.g. the surface was
@@ -842,6 +853,9 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         }
 
         func handleViewReenteredWindow() {
+#if DEBUG
+            NSLog("MarkdownPanel.handleViewReenteredWindow isLoaded=\(isLoaded) wasHealthy=\(shellWasHealthyWhenDetached) wasLoading=\(shellWasLoadingWhenDetached) filePath=\(filePath)")
+#endif
             // A still-loaded shell — alive but merely unpainted — is left
             // intact; the host view's repaint nudge handles that case.
             guard !isLoaded else { return }
