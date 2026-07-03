@@ -104,6 +104,13 @@ enum KeyboardShortcutSettings {
         case focusHistoryBack
         case focusHistoryForward
         case selectWorkspaceByNumber
+        // Workspace slots (fork): fixed numbered targets with self-healing
+        // roles; active only when ~/.config/cmux/slots.json enables them.
+        case slotSelect
+        case slotSelectJot
+        case nukeWorkspace
+        case banishWorkspace
+        case unbanishAllWorkspaces
         case renameTab
         case renameWorkspace
         case editWorkspaceDescription
@@ -226,6 +233,11 @@ enum KeyboardShortcutSettings {
             case .focusHistoryBack: return String(localized: "shortcut.focusHistoryBack.label", defaultValue: "Focus Back")
             case .focusHistoryForward: return String(localized: "shortcut.focusHistoryForward.label", defaultValue: "Focus Forward")
             case .selectWorkspaceByNumber: return String(localized: "shortcut.selectWorkspaceByNumber.label", defaultValue: "Select Workspace 1…9")
+            case .slotSelect: return String(localized: "shortcut.slotSelect.label", defaultValue: "Workspace Slot 1…9")
+            case .slotSelectJot: return String(localized: "shortcut.slotSelectJot.label", defaultValue: "Workspace Slot 0 (Jot Pad)")
+            case .nukeWorkspace: return String(localized: "shortcut.nukeWorkspace.label", defaultValue: "Nuke Focused Workspace")
+            case .banishWorkspace: return String(localized: "shortcut.banishWorkspace.label", defaultValue: "Banish Focused Workspace")
+            case .unbanishAllWorkspaces: return String(localized: "shortcut.unbanishAllWorkspaces.label", defaultValue: "Unbanish All Workspaces")
             case .renameTab: return String(localized: "shortcut.renameTab.label", defaultValue: "Rename Tab")
             case .renameWorkspace: return String(localized: "shortcut.renameWorkspace.label", defaultValue: "Rename Workspace")
             case .editWorkspaceDescription: return String(localized: "shortcut.editWorkspaceDescription.label", defaultValue: "Edit Workspace Description")
@@ -493,6 +505,16 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "k", command: true, shift: true, option: false, control: false)
             case .selectWorkspaceByNumber:
                 return StoredShortcut(key: "1", command: true, shift: false, option: false, control: false)
+            case .slotSelect:
+                return StoredShortcut(key: "1", command: true, shift: false, option: false, control: false)
+            case .slotSelectJot:
+                return StoredShortcut(key: "0", command: true, shift: false, option: false, control: false)
+            case .nukeWorkspace:
+                return StoredShortcut(key: "\u{7F}", command: true, shift: true, option: false, control: false)
+            case .banishWorkspace:
+                return StoredShortcut(key: "b", command: true, shift: true, option: false, control: false)
+            case .unbanishAllWorkspaces:
+                return StoredShortcut(key: "u", command: true, shift: true, option: false, control: false)
             case .toggleRightSidebar:
                 return StoredShortcut(key: "b", command: true, shift: false, option: true, control: false)
             case .fileExplorerOpenSelection:
@@ -584,7 +606,7 @@ enum KeyboardShortcutSettings {
 
         var usesNumberedDigitMatching: Bool {
             switch self {
-            case .selectSurfaceByNumber, .selectWorkspaceByNumber:
+            case .selectSurfaceByNumber, .selectWorkspaceByNumber, .slotSelect:
                 return true
             default:
                 return false
@@ -716,7 +738,7 @@ enum KeyboardShortcutSettings {
                     for: self,
                     checkingConflicts: checkingSystemWideConflicts
                 )
-            case .selectSurfaceByNumber, .selectWorkspaceByNumber:
+            case .selectSurfaceByNumber, .selectWorkspaceByNumber, .slotSelect:
                 return resolvedNumberedDigitShortcut(shortcut)
             default:
                 return .accepted(shortcut)
