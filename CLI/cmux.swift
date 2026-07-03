@@ -5127,6 +5127,19 @@ struct CMUXCLI {
 
         // Determine subcommand. Explicit "open" is supported, otherwise treat
         // a single positional argument as shorthand path.
+        if let first = args.first, first.lowercased() == "set-mode" {
+            try runMarkdownSetModeCommand(
+                args: Array(args.dropFirst()),
+                workspaceOpt: workspaceOpt,
+                windowOpt: windowOpt,
+                surfaceOpt: surfaceOpt,
+                client: client,
+                jsonOutput: jsonOutput,
+                idFormat: idFormat
+            )
+            return
+        }
+
         let subArgs: [String]
         if let first = args.first, first.lowercased() == "open" {
             subArgs = Array(args.dropFirst())
@@ -5217,6 +5230,70 @@ struct CMUXCLI {
             let paneText = formatHandle(payload, kind: "pane", idFormat: idFormat) ?? "unknown"
             let filePath = (payload["path"] as? String) ?? absolutePath
             print("OK surface=\(surfaceText) pane=\(paneText) path=\(filePath)")
+        }
+    }
+
+    /// `cmux markdown set-mode [preview|text|toggle] [--surface <ref>] [--save <true|false>]`
+    /// — switch a markdown surface between the rendered preview and the plain
+    /// text editor. Defaults: mode=toggle, surface=focused, save=true (leaving
+    /// the editor commits dirty content, matching the in-app toggle).
+    private func runMarkdownSetModeCommand(
+        args: [String],
+        workspaceOpt: String?,
+        windowOpt: String?,
+        surfaceOpt: String?,
+        client: SocketClient,
+        jsonOutput: Bool,
+        idFormat: CLIIDFormat
+    ) throws {
+        let (saveOpt, argsAfterSave) = parseOption(args, name: "--save")
+        var positional = argsAfterSave
+        var mode = "toggle"
+        if let first = positional.first, !first.hasPrefix("-") {
+            mode = first.lowercased()
+            positional = Array(positional.dropFirst())
+        }
+        guard ["preview", "text", "toggle"].contains(mode) else {
+            throw CLIError(message: "markdown set-mode: invalid mode '\(mode)' (preview|text|toggle)")
+        }
+        if let extra = positional.first {
+            throw CLIError(
+                message: "markdown set-mode: unexpected argument '\(extra)'. Usage: cmux markdown set-mode [preview|text|toggle] [--surface <id|ref|index>] [--workspace <id|ref|index>] [--save <true|false>]"
+            )
+        }
+
+        var params: [String: Any] = ["mode": mode]
+        if let saveRaw = saveOpt {
+            guard let save = parseBoolString(saveRaw) else {
+                throw CLIError(message: "markdown set-mode: --save must be true or false")
+            }
+            params["save"] = save
+        }
+        if let surfaceRaw = surfaceOpt {
+            if let surface = try normalizeSurfaceHandle(surfaceRaw, client: client) {
+                params["surface_id"] = surface
+            }
+        }
+        let workspaceRaw = workspaceOpt ?? (windowOpt == nil ? ProcessInfo.processInfo.environment["CMUX_WORKSPACE_ID"] : nil)
+        if let workspaceRaw {
+            if let workspace = try normalizeWorkspaceHandle(workspaceRaw, client: client) {
+                params["workspace_id"] = workspace
+            }
+        }
+        if let windowRaw = windowOpt {
+            if let window = try normalizeWindowHandle(windowRaw, client: client) {
+                params["window_id"] = window
+            }
+        }
+
+        let payload = try client.sendV2(method: "markdown.set_mode", params: params)
+        if jsonOutput {
+            print(jsonString(formatIDs(payload, mode: idFormat)))
+        } else {
+            let surfaceText = formatHandle(payload, kind: "surface", idFormat: idFormat) ?? "unknown"
+            let modeText = (payload["mode"] as? String) ?? mode
+            let savedText = (payload["saved"] as? Bool) == true ? " saved=true" : ""
+            print("OK surface=\(surfaceText) mode=\(modeText)\(savedText)")
         }
     }
 
@@ -16119,6 +16196,7 @@ struct CMUXCLI {
             return """
             Usage: cmux markdown open <path> [options]
                    cmux markdown <path>       (shorthand for 'open')
+                   cmux markdown set-mode [preview|text|toggle] [--surface <id|ref|index>] [--save <true|false>]
 
             Open a markdown file in a formatted viewer panel with live file watching.
             The file is rendered with rich formatting (headings, code blocks, tables,
