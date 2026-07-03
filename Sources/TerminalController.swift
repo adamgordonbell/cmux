@@ -2092,6 +2092,7 @@ class TerminalController {
             "app.simulate_active",
             "file.open",
             "markdown.open",
+            "markdown.set_mode",
             "browser.open_split",
             "browser.navigate",
             "browser.back",

@@ -60,3 +60,12 @@ public enum ControlMarkdownOpenResolution: Sendable, Equatable {
     /// The split was created.
     case opened(Created)
 }
+
+/// The outcome of `markdown.set_mode` (toggle a markdown surface between the
+/// rendered preview and the plain-text editor).
+public enum ControlMarkdownSetModeResolution: Sendable, Equatable {
+    case workspaceNotFound
+    case surfaceNotFound(UUID?)
+    case notMarkdownSurface(UUID)
+    case set(workspaceID: UUID, surfaceID: UUID, mode: String, isDirty: Bool, saved: Bool)
+}

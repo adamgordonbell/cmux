@@ -249,6 +249,56 @@ extension TerminalController: ControlProjectContext {
     /// `file.open` forwards to the single shared `v2FileOpen` body (also driven
     /// directly by cmuxTests), bridging its Foundation result — one source of
     /// truth, byte-identical wire output.
+    // MARK: - markdown.set_mode
+
+    func controlMarkdownSetMode(
+        routing: ControlRoutingSelectors,
+        surfaceID: UUID?,
+        mode: String,
+        save: Bool
+    ) -> ControlMarkdownSetModeResolution {
+        guard let tabManager = resolveTabManager(routing: routing) else {
+            return .workspaceNotFound
+        }
+        guard let ws = controlProjectResolveWorkspace(routing: routing, tabManager: tabManager) else {
+            return .workspaceNotFound
+        }
+        let targetSurfaceId = surfaceID ?? ws.focusedPanelId
+        guard let targetSurfaceId else {
+            return .surfaceNotFound(nil)
+        }
+        guard let panel = ws.panels[targetSurfaceId] else {
+            return .surfaceNotFound(targetSurfaceId)
+        }
+        guard let markdownPanel = panel as? MarkdownPanel else {
+            return .notMarkdownSurface(targetSurfaceId)
+        }
+
+        let target: MarkdownPanelDisplayMode
+        switch mode {
+        case "preview": target = .preview
+        case "text": target = .text
+        default: target = markdownPanel.displayMode == .preview ? .text : .preview
+        }
+
+        // Match the interactive contract: leaving the text editor commits the
+        // edit (unless the caller opts out with save=false).
+        var saved = false
+        if markdownPanel.displayMode == .text, target == .preview,
+           save, markdownPanel.isDirty {
+            _ = markdownPanel.saveTextContent()
+            saved = true
+        }
+        markdownPanel.setDisplayMode(target)
+        return .set(
+            workspaceID: ws.id,
+            surfaceID: targetSurfaceId,
+            mode: target.rawValue,
+            isDirty: markdownPanel.isDirty,
+            saved: saved
+        )
+    }
+
     func controlFileOpen(params: [String: JSONValue]) -> ControlCallResult {
         switch v2FileOpen(params: params.mapValues(\.foundationObject)) {
         case let .ok(payload):

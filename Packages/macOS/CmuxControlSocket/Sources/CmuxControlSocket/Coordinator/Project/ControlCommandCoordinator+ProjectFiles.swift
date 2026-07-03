@@ -76,6 +76,56 @@ extension ControlCommandCoordinator {
         }
     }
 
+    /// `markdown.set_mode` — switch a markdown surface between the rendered
+    /// preview and the plain-text editor (the native replacement for
+    /// Accessibility-based mode-toggle hacks).
+    func markdownSetMode(_ params: [String: JSONValue]) -> ControlCallResult {
+        let routing = routingSelectors(params)
+        guard projectContext?.controlProjectRoutingResolvesTabManager(routing: routing) == true else {
+            return .err(code: "unavailable", message: "TabManager not available", data: nil)
+        }
+        let mode = string(params, "mode") ?? "toggle"
+        guard ["preview", "text", "toggle"].contains(mode) else {
+            return .err(
+                code: "invalid_params",
+                message: "Invalid 'mode' '\(mode)' (preview|text|toggle)",
+                data: nil
+            )
+        }
+        let resolution = projectContext?.controlMarkdownSetMode(
+            routing: routing,
+            surfaceID: uuid(params, "surface_id"),
+            mode: mode,
+            save: bool(params, "save") ?? true
+        ) ?? .workspaceNotFound
+        switch resolution {
+        case .workspaceNotFound:
+            return .err(code: "not_found", message: "Workspace not found", data: nil)
+        case .surfaceNotFound(let surfaceID):
+            return .err(
+                code: "not_found",
+                message: "Surface not found",
+                data: surfaceID.map { .object(["surface_id": .string($0.uuidString)]) }
+            )
+        case .notMarkdownSurface(let surfaceID):
+            return .err(
+                code: "invalid_params",
+                message: "Surface is not a markdown panel",
+                data: .object(["surface_id": .string(surfaceID.uuidString)])
+            )
+        case .set(let workspaceID, let surfaceID, let mode, let isDirty, let saved):
+            return .ok(.object([
+                "workspace_id": .string(workspaceID.uuidString),
+                "workspace_ref": ref(.workspace, workspaceID),
+                "surface_id": .string(surfaceID.uuidString),
+                "surface_ref": ref(.surface, surfaceID),
+                "mode": .string(mode),
+                "dirty": .bool(isDirty),
+                "saved": .bool(saved),
+            ]))
+        }
+    }
+
     /// `file.open` — open one or more files as preview/markdown surfaces.
     ///
     /// A passthrough to the still-shared `v2FileOpen` body (also driven directly
