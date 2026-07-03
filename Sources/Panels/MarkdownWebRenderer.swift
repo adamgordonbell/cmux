@@ -36,11 +36,30 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         session.coordinator(panelId: panelId, workspaceId: workspaceId, filePath: filePath)
     }
 
-    func makeNSView(context: Context) -> WKWebView {
+    /// Each representable instance gets its own throwaway container view; the
+    /// shared, session-retained WKWebView is parented into the *current*
+    /// container by the coordinator (the single owner of webview parenting).
+    ///
+    /// Why not return the WKWebView directly: SwiftUI can host two
+    /// representable instances for the same tab within one transaction (e.g. a
+    /// cross-pane move whose source pane collapses). If both hosts hand SwiftUI
+    /// the same NSView instance, the dying host's teardown rips the webview out
+    /// of the adopting host's hierarchy — permanently, since SwiftUI believes
+    /// the new host still holds it. With per-host containers, teardown only
+    /// ever destroys a container; the coordinator re-parents the webview into
+    /// the live container on the next runloop tick.
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.autoresizesSubviews = true
+        ensureWebView(context: context)
+        context.coordinator.adopt(container: container)
+        return container
+    }
+
+    /// Create the session-retained webview if needed, and (re)apply the
+    /// per-host bindings that must track the current renderer instance.
+    private func ensureWebView(context: Context) {
         if let webView = context.coordinator.webView {
-            if webView.superview != nil {
-                webView.removeFromSuperview()
-            }
             webView.onPointerDown = onRequestPanelFocus
             webView.onLeaveWindow = { [weak coordinator = context.coordinator] in
                 coordinator?.handleViewLeftWindow()
@@ -55,7 +74,7 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             context.coordinator.setFontSize(fontSize)
             context.coordinator.setFontFamily(fontFamily)
             context.coordinator.setMaxContentWidth(maxContentWidth)
-            return webView
+            return
         }
 
         let config = WKWebViewConfiguration()
@@ -100,16 +119,18 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         context.coordinator.setFontFamily(fontFamily)
         context.coordinator.setMaxContentWidth(maxContentWidth)
         context.coordinator.loadShell(theme: theme, initialMarkdown: markdown)
-        return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {
+    func updateNSView(_ nsView: NSView, context: Context) {
         // Re-bind panel metadata in case SwiftUI recreated the wrapper while
         // the panel-owned renderer session kept the same coordinator.
         context.coordinator.bind(panelId: panelId, workspaceId: workspaceId, filePath: filePath)
-        (nsView as? MarkdownWebView)?.onPointerDown = onRequestPanelFocus
-        applyBackground(to: nsView)
-        applyAppearance(to: nsView, isDark: theme.isDark)
+        context.coordinator.adopt(container: nsView)
+        if let webView = context.coordinator.webView {
+            (webView as? MarkdownWebView)?.onPointerDown = onRequestPanelFocus
+            applyBackground(to: webView)
+            applyAppearance(to: webView, isDark: theme.isDark)
+        }
         context.coordinator.setFontSize(fontSize)
         context.coordinator.setFontFamily(fontFamily)
         context.coordinator.setMaxContentWidth(maxContentWidth)
@@ -118,16 +139,20 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         context.coordinator.setVisible(isVisibleInUI)
     }
 
-    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
-        if let retainedWebView = coordinator.webView, retainedWebView === nsView {
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.containerWillDismantle(nsView)
+        // Legacy path (kept for tests and defense): a raw webview handed in
+        // directly — clean it up unless it is the session-retained one.
+        guard let webView = nsView as? WKWebView else { return }
+        if let retainedWebView = coordinator.webView, retainedWebView === webView {
             return
         }
-        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "cmuxLib")
-        nsView.navigationDelegate = nil
-        nsView.uiDelegate = nil
-        (nsView as? MarkdownWebView)?.onPointerDown = nil
-        (nsView as? MarkdownWebView)?.onLeaveWindow = nil
-        (nsView as? MarkdownWebView)?.onReenterWindow = nil
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "cmuxLib")
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        (webView as? MarkdownWebView)?.onPointerDown = nil
+        (webView as? MarkdownWebView)?.onLeaveWindow = nil
+        (webView as? MarkdownWebView)?.onReenterWindow = nil
         coordinator.cancelImageLoads()
     }
 
@@ -289,6 +314,7 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             lastVisible = nil
             rehostAttempts = 0
             onRequestRehost = nil
+            currentContainer = nil
             cancelImageLoads()
             requestedLibs.removeAll()
         }
@@ -299,6 +325,56 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         /// Set by the hosting view; rebuilds the representable so makeNSView
         /// re-adopts the webview into a live host (orphan recovery).
         var onRequestRehost: (() -> Void)?
+        /// The representable container that should currently host the webview.
+        /// The coordinator is the single owner of webview parenting — SwiftUI
+        /// only ever creates/destroys containers (see makeNSView).
+        private weak var currentContainer: NSView?
+
+        /// Make `container` the webview's host. First-time adoption (webview
+        /// has no superview) is synchronous so the initial mount never shows a
+        /// blank frame. Migration between containers is deferred one runloop
+        /// tick: within a single SwiftUI transaction an old host's teardown can
+        /// run *after* a new host's creation, so re-parenting immediately would
+        /// let the teardown rip the webview back out. After the transaction
+        /// settles, the surviving container is unambiguous.
+        func adopt(container: NSView) {
+            guard currentContainer !== container else {
+                scheduleReparentIfNeeded()
+                return
+            }
+            currentContainer = container
+            if webView?.superview == nil {
+                reparentNow()
+            } else {
+                scheduleReparentIfNeeded()
+            }
+        }
+
+        func containerWillDismantle(_ container: NSView) {
+            // The webview may sit inside the dying container; make sure a
+            // settle-tick re-parent is queued so it lands back in the live one.
+            scheduleReparentIfNeeded()
+        }
+
+        private var reparentScheduled = false
+        private func scheduleReparentIfNeeded() {
+            guard !reparentScheduled else { return }
+            reparentScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.reparentScheduled = false
+                self.reparentNow()
+            }
+        }
+
+        private func reparentNow() {
+            guard let webView, let container = currentContainer else { return }
+            guard webView.superview !== container else { return }
+            webView.removeFromSuperview()
+            webView.frame = container.bounds
+            webView.autoresizingMask = [.width, .height]
+            container.addSubview(webView)
+        }
         /// Last shown-state reported by the hosting view.
         private var lastVisible: Bool? = nil
         /// Rehost attempts for the current orphan episode; reset when the
@@ -331,6 +407,13 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, let webView = self.webView else { return }
                 guard self.lastVisible == true else { return }
+                if webView.window != nil {
+                    self.rehostAttempts = 0
+                    return
+                }
+                // First try the cheap repair: put the webview back into the
+                // current container (covers a teardown that ripped it out).
+                self.reparentNow()
                 if webView.window != nil {
                     self.rehostAttempts = 0
                     return
