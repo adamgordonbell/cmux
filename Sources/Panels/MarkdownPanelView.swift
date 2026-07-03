@@ -90,7 +90,6 @@ struct MarkdownPanelView: View {
                 fontFamily: panel.fontFamily,
                 maxContentWidth: panel.maxContentWidth,
                 session: panel.rendererSession,
-                isVisibleInUI: isVisibleInUI,
                 onRequestPanelFocus: onRequestPanelFocus
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
