@@ -146,6 +146,23 @@ public protocol ControlProjectContext: AnyObject {
         requestedFocus: Bool
     ) -> ControlMarkdownOpenResolution
 
+    /// Switches a markdown surface between preview and text-edit modes for
+    /// `markdown.set_mode`.
+    ///
+    /// - Parameters:
+    ///   - routing: The routing selectors.
+    ///   - surfaceID: The explicit `surface_id`, if any (default: the
+    ///     workspace's focused surface).
+    ///   - mode: `"preview"`, `"text"`, or `"toggle"` (already validated).
+    ///   - save: Whether to save dirty text content when leaving text mode.
+    /// - Returns: The set resolution.
+    func controlMarkdownSetMode(
+        routing: ControlRoutingSelectors,
+        surfaceID: UUID?,
+        mode: String,
+        save: Bool
+    ) -> ControlMarkdownSetModeResolution
+
     /// Opens file surfaces for `file.open` (the paths are already validated).
     ///
     /// Forwards to the shared `v2FileOpen` body (also driven by cmuxTests) and

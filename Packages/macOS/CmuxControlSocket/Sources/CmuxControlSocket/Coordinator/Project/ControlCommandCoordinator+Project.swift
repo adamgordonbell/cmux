@@ -35,6 +35,8 @@ extension ControlCommandCoordinator {
             return projectGetState(request.params)
         case "markdown.open":
             return markdownOpen(request.params)
+        case "markdown.set_mode":
+            return markdownSetMode(request.params)
         case "file.open":
             return fileOpen(request.params)
         default:
