@@ -4968,6 +4968,7 @@ struct CMUXCLI {
              "previous-window",
              "find-window",
              "clear-history",
+             "reveal",
              "set-hook",
              "popup",
              "bind-key",
@@ -15691,6 +15692,14 @@ struct CMUXCLI {
               --content                 Search terminal content in addition to workspace titles
               --select                  Select the first match
             """
+        case "reveal":
+            return """
+            Usage: cmux reveal <surface> [--workspace <id|ref|index>] [--window <id|ref|index>]
+
+            Select a surface's tab in its pane WITHOUT moving keyboard focus.
+            For preview tooling (mdtab) that must show a tab while the user
+            keeps typing elsewhere.
+            """
         case "clear-history":
             return """
             Usage: cmux clear-history [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>]
@@ -22978,6 +22987,20 @@ struct CMUXCLI {
                     print("\(handle)  \"\(title)\"")
                 }
             }
+
+        case "reveal":
+            let workspaceArg = workspaceFromArgsOrEnv(commandArgs, windowOverride: windowOverride)
+            let surfaceArg = optionValue(commandArgs, name: "--surface") ?? commandArgs.first(where: { !$0.hasPrefix("-") })
+            var params: [String: Any] = [:]
+            let winId = try normalizeWindowHandle(windowFromArgsOrOverride(commandArgs, windowOverride: windowOverride), client: client)
+            if let winId { params["window_id"] = winId }
+            let wsId = try normalizeWorkspaceHandle(workspaceArg, client: client, windowHandle: winId)
+            if let wsId { params["workspace_id"] = wsId }
+            let sfId = try normalizeSurfaceHandle(surfaceArg, client: client, workspaceHandle: wsId, windowHandle: winId, allowFocused: false)
+            guard let sfId else { throw CLIError(message: "Usage: cmux reveal <surface> [--workspace <ref>]") }
+            params["surface_id"] = sfId
+            let payload = try client.sendV2(method: "surface.reveal", params: params)
+            printV2Payload(payload, jsonOutput: jsonOutput, idFormat: idFormat, fallbackText: v2OKSummary(payload, idFormat: idFormat))
 
         case "clear-history":
             let workspaceArg = workspaceFromArgsOrEnv(commandArgs, windowOverride: windowOverride)

@@ -37,6 +37,8 @@ extension ControlCommandCoordinator {
             return surfaceReorder(request.params)
         case "surface.refresh":
             return surfaceRefresh(request.params)
+        case "surface.reveal":
+            return surfaceReveal(request.params)
         case "surface.health":
             return surfaceHealth(request.params)
         case "surface.resume.set":
