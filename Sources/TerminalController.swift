@@ -2055,6 +2055,7 @@ class TerminalController {
             "surface.action",
             "tab.action",
             "surface.refresh",
+            "surface.reveal",
             "surface.health",
             "surface.resume.set",
             "surface.resume.get",

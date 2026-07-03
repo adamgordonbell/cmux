@@ -401,6 +401,11 @@ extension ControlSurfaceContext {
         routing: ControlRoutingSelectors
     ) -> ControlSurfaceRefreshResolution { .tabManagerUnavailable }
 
+    func controlSurfaceReveal(
+        routing: ControlRoutingSelectors,
+        surfaceID: UUID?
+    ) -> ControlSurfaceRevealResolution { .tabManagerUnavailable }
+
     func controlSurfaceClearHistory(
         routing: ControlRoutingSelectors,
         surfaceID: UUID?,
