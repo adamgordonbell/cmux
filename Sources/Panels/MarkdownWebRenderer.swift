@@ -169,6 +169,12 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         /// WebContent while attached (a crash loop whose recovery budget must
         /// not be reset by pane reparenting).
         private var shellWasHealthyWhenDetached = false
+        /// Whether a shell load was genuinely in flight (not an exhausted
+        /// crash loop) at the moment the host view last left its window. A
+        /// surface reparented mid-load — e.g. opened and immediately moved
+        /// into another pane — was never "healthy", so without this the
+        /// re-entry recovery skips it and the panel stays permanently blank.
+        private var shellWasLoadingWhenDetached = false
 
         private struct ImageLoadResult {
             let data: Data
@@ -328,6 +334,7 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             pendingReattach = false
             webContentProcessRecoveryAttempts = 0
             shellWasHealthyWhenDetached = false
+            shellWasLoadingWhenDetached = false
             cancelImageLoads()
             requestedLibs.removeAll()
         }
@@ -817,17 +824,26 @@ struct MarkdownWebRenderer: NSViewRepresentable {
         /// the shell was loaded when it was detached.
         func handleViewLeftWindow() {
             shellWasHealthyWhenDetached = isLoaded
+            // A load still in flight at detach time is also recoverable: the
+            // shell never got a chance to become healthy (e.g. the surface was
+            // opened and immediately reparented into another pane). Exclude a
+            // payload whose recovery budget is already exhausted so a crash
+            // loop cannot launder a fresh budget through reparenting.
+            shellWasLoadingWhenDetached = isShellLoading
+                && webContentProcessRecoveryAttempts < maxWebContentProcessRecoveryAttempts
         }
 
         func handleViewReenteredWindow() {
             // A still-loaded shell — alive but merely unpainted — is left
             // intact; the host view's repaint nudge handles that case.
             guard !isLoaded else { return }
-            // Recover only when the document was healthy before the detach, so
-            // a payload that exhausted its crash-recovery budget while attached
-            // (a crash loop) is not granted a fresh budget by pane reparenting.
-            guard shellWasHealthyWhenDetached else { return }
+            // Recover only when the document was healthy — or a load was
+            // genuinely in flight — before the detach, so a payload that
+            // exhausted its crash-recovery budget while attached (a crash
+            // loop) is not granted a fresh budget by pane reparenting.
+            guard shellWasHealthyWhenDetached || shellWasLoadingWhenDetached else { return }
             shellWasHealthyWhenDetached = false
+            shellWasLoadingWhenDetached = false
             // A reload kicked off while detached can stall (no didFinish until
             // the view is back in a window), so reload unconditionally — even
             // mid-load. A deliberate reattach is not a crash loop, so restore
