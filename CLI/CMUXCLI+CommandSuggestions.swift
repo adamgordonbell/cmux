@@ -207,6 +207,7 @@ extension CMUXCLI {
         "simulator",
         "sidebar",
         "sidebar-state",
+        "slot",
         "split-off",
         "ssh",
         "ssh-pty-attach",

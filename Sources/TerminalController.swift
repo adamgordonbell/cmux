@@ -3282,6 +3282,15 @@ class TerminalController {
         case "browser.input_touch":
             return v2Result(id: id, self.v2BrowserInputTouch(params: params))
 
+        case "slots.select":
+            return v2Result(id: id, self.v2SlotsSelect(params: params))
+        case "slots.nuke":
+            return v2Result(id: id, self.v2SlotsNuke(params: params))
+        case "slots.banish":
+            return v2Result(id: id, self.v2SlotsBanish(params: params))
+        case "slots.unbanish_all":
+            return v2Result(id: id, self.v2SlotsUnbanishAll(params: params))
+
         // Markdown/files/projects: markdown.open, file.open (forwards to the
         // still-shared v2FileOpen), and project.* handled by ControlCommandCoordinator.
 
