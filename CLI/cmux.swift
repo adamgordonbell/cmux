@@ -5117,7 +5117,8 @@ struct CMUXCLI {
         let (workspaceOpt, argsAfterWorkspace) = parseOption(args, name: "--workspace")
         let (windowOpt, argsAfterWindow) = parseOption(argsAfterWorkspace, name: "--window")
         let (surfaceOpt, argsAfterSurface) = parseOption(argsAfterWindow, name: "--surface")
-        let (directionOpt, argsAfterDirection) = parseOption(argsAfterSurface, name: "--direction")
+        let (paneOpt, argsAfterPane) = parseOption(argsAfterSurface, name: "--pane")
+        let (directionOpt, argsAfterDirection) = parseOption(argsAfterPane, name: "--direction")
         let (focusOpt, argsAfterFocus) = parseOption(argsAfterDirection, name: "--focus")
         let (fontSizeOpt, argsAfterFontSize) = parseOption(argsAfterFocus, name: "--font-size")
         args = argsAfterFontSize
@@ -5137,7 +5138,7 @@ struct CMUXCLI {
             if let first = args.first, first.hasPrefix("-") {
                 throw CLIError(
                     message:
-                        "markdown open: unknown flag '\(first)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
+                        "markdown open: unknown flag '\(first)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
                 )
             } else if let first = args.first, looksLikePath(first) || first.contains(".") {
                 subArgs = args
@@ -5155,13 +5156,13 @@ struct CMUXCLI {
         if let unknownFlag = trailingArgs.first(where: { $0.hasPrefix("-") }) {
             throw CLIError(
                 message:
-                    "markdown open: unknown flag '\(unknownFlag)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
+                    "markdown open: unknown flag '\(unknownFlag)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
             )
         }
         if let extraArg = trailingArgs.first {
             throw CLIError(
                 message:
-                    "markdown open: unexpected argument '\(extraArg)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
+                    "markdown open: unexpected argument '\(extraArg)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>] [--font-size <points>]"
             )
         }
 
@@ -5179,14 +5180,30 @@ struct CMUXCLI {
             }
         }
         let workspaceRaw = workspaceOpt ?? (windowOpt == nil ? ProcessInfo.processInfo.environment["CMUX_WORKSPACE_ID"] : nil)
+        var workspaceHandle: String?
         if let workspaceRaw {
             if let workspace = try normalizeWorkspaceHandle(workspaceRaw, client: client) {
+                workspaceHandle = workspace
                 params["workspace_id"] = workspace
             }
         }
+        var windowHandle: String?
         if let windowRaw = windowOpt {
             if let window = try normalizeWindowHandle(windowRaw, client: client) {
+                windowHandle = window
                 params["window_id"] = window
+            }
+        }
+        if let paneRaw = paneOpt {
+            // Open into an existing pane as a tab (no split); --direction is
+            // ignored when a target pane is given.
+            if let pane = try normalizePaneHandle(
+                paneRaw,
+                client: client,
+                workspaceHandle: workspaceHandle,
+                windowHandle: windowHandle
+            ) {
+                params["pane_id"] = pane
             }
         }
         try applyFocusOption(focusOpt, defaultValue: false, to: &params)
@@ -16110,6 +16127,7 @@ struct CMUXCLI {
             Options:
               --workspace <id|ref|index>   Target workspace (default: $CMUX_WORKSPACE_ID)
               --surface <id|ref|index>     Source surface to split from (default: focused surface)
+              --pane <id|ref|index>        Open as a tab in this existing pane (no split; --direction is ignored)
               --window <id|ref|index>      Target window
               --direction <left|right|up|down>  Split direction (default: right)
               --focus <true|false>         Focus the markdown panel (default: false)
