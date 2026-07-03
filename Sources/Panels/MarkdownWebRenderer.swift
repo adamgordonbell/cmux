@@ -781,6 +781,14 @@ struct MarkdownWebRenderer: NSViewRepresentable {
             let md = lastMarkdown ?? pendingMarkdown
             lastMarkdown = md
             pushMarkdown(md)
+            // The shell is loaded and the markdown payload has been pushed:
+            // announce the render so CLI callers can await it (e.g. before
+            // reparenting the surface) instead of sleeping.
+            CmuxEventBus.shared.publishMarkdownRendered(
+                workspaceId: workspaceId,
+                surfaceId: panelId,
+                filePath: filePath
+            )
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
