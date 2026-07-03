@@ -1410,7 +1410,7 @@ final class TabManagerCloseCurrentTabSpamTests: XCTestCase {
                 XCTFail("Expected each workspace to have a focused terminal panel")
                 return
             }
-            terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(true)
+            terminalPanel.updateShellActivityState(.commandRunning)
         }
 
         var prompts: [(title: String, message: String, acceptCmdD: Bool)] = []
@@ -1445,7 +1445,7 @@ final class TabManagerCloseCurrentTabSpamTests: XCTestCase {
 
         let fakeSurface: ghostty_surface_t = UnsafeMutableRawPointer(bitPattern: 0x5282)!
         terminalPanel.surface.installRuntimeSurfaceForTesting(fakeSurface)
-        terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(true)
+        terminalPanel.updateShellActivityState(.commandRunning)
 
         let nativeFreeStarted = expectation(description: "native free started")
         TerminalSurface.runtimeSurfaceFreeOverrideForTesting = { _ in
@@ -1478,7 +1478,7 @@ final class TabManagerCloseCurrentTabSpamTests: XCTestCase {
                 XCTFail("Expected each workspace to have a focused terminal panel")
                 return
             }
-            terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(false)
+            terminalPanel.updateShellActivityState(.promptIdle)
         }
 
         var promptCount = 0
@@ -1643,7 +1643,6 @@ final class TabManagerCloseCurrentPanelTests: XCTestCase {
             return
         }
 
-        terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(true)
         workspace.updatePanelShellActivityState(panelId: panelId, state: .promptIdle)
 
         var promptCount = 0
@@ -1670,7 +1669,6 @@ final class TabManagerCloseCurrentPanelTests: XCTestCase {
             return
         }
 
-        terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(false)
         workspace.updatePanelShellActivityState(panelId: panelId, state: .commandRunning)
 
         var promptCount = 0
@@ -1972,7 +1970,7 @@ final class TabManagerCloseCurrentPanelTests: XCTestCase {
                 return
             }
             workspace.focusPanel(initialPanelId)
-            initialTerminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(true)
+            initialTerminalPanel.updateShellActivityState(.commandRunning)
 
             var promptCount = 0
             manager.confirmCloseHandler = { _, _, _ in
@@ -2061,7 +2059,7 @@ final class TabManagerCloseCurrentPanelTests: XCTestCase {
                 return
             }
             workspace.focusPanel(initialPanelId)
-            initialTerminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(panelNeedsConfirmation)
+            initialTerminalPanel.updateShellActivityState(panelNeedsConfirmation ? .commandRunning : .promptIdle)
 
             var promptCount = 0
             manager.confirmCloseHandler = { _, _, _ in

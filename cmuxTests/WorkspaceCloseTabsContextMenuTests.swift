@@ -163,7 +163,7 @@ struct WorkspaceCloseTabsContextMenuTests {
             let panelId = try #require(workspace.panelIdFromSurfaceId(tabId))
             workspace.setPanelCustomTitle(panelId: panelId, title: "Tab \(index + 1)")
             let terminalPanel = try #require(workspace.terminalPanel(for: panelId))
-            terminalPanel.surface.setNeedsConfirmCloseOverrideForTesting(true)
+            terminalPanel.updateShellActivityState(.commandRunning)
         }
 
         return Fixture(manager: manager, workspace: workspace, paneId: paneId, tabIds: tabIds)

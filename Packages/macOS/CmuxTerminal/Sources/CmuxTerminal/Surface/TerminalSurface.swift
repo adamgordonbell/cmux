@@ -259,7 +259,6 @@ public final class TerminalSurface: Identifiable, ObservableObject {
     /// Bumped after every completed runtime clipboard read.
     public internal(set) var clipboardReadGeneration = 0
 #if DEBUG
-    var needsConfirmCloseOverrideForTesting: Bool?
     var runtimeSurfaceFreedOutOfBandForTesting = false
     var runtimeSurfaceCreateAttemptCountForTesting = 0
     // Same off-isolation-reader carve-out as debugMetadataLock.

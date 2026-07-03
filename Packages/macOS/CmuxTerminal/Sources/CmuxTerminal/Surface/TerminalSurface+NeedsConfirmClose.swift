@@ -11,11 +11,6 @@ extension TerminalSurface {
     /// main-thread path — see ``snapshotNeedsConfirmClose()`` for the
     /// session-snapshot path.
     public func needsConfirmClose() -> Bool {
-#if DEBUG
-        if let needsConfirmCloseOverrideForTesting {
-            return needsConfirmCloseOverrideForTesting
-        }
-#endif
         guard let surface = surface else { return false }
         return ghostty_surface_needs_confirm_quit(surface)
     }
@@ -41,11 +36,6 @@ extension TerminalSurface {
     /// `!child_exited`. A live child still needs confirmation; an exited one does
     /// not.
     public func snapshotNeedsConfirmClose() -> Bool {
-#if DEBUG
-        if let needsConfirmCloseOverrideForTesting {
-            return needsConfirmCloseOverrideForTesting
-        }
-#endif
         guard let surface = surface else { return false }
         return !ghostty_surface_process_exited(surface)
     }
