@@ -180,6 +180,7 @@ extension CMUXCLI {
         "simulate-app-active",
         "sidebar",
         "sidebar-state",
+        "slot",
         "split-off",
         "ssh",
         "ssh-pty-attach",

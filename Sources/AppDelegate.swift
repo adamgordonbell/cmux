@@ -13716,6 +13716,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return true
         }
 
+        // Workspace slots (fork): when enabled, the slot actions own their keys
+        // and are consumed before the stock numbered-workspace fallback, so the
+        // same keystroke can never race between two orderings.
+        if WorkspaceSlots.isEnabled {
+            if let digit = routableNumberedConfiguredShortcutDigit(event: event, action: .slotSelect) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+#if DEBUG
+                    cmuxDebugLog("shortcut.action name=slotSelect digit=\(digit)")
+#endif
+                    WorkspaceSlots.select(digit, tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .slotSelectJot) || slotJotZeroKeyMatch(event: event) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.select(0, tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .nukeWorkspace) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.nukeFocused(tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .banishWorkspace) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.banishFocused(tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .unbanishAllWorkspaces) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.unbanishAll(tabManager: manager)
+                }
+                return true
+            }
+        }
+
         // Numeric shortcuts for specific workspaces (9 = last workspace)
         // Always consume the event when the digit matches to prevent Ghostty's
         // goto_tab fallback from creating a new window when the index is out of bounds.
@@ -15088,6 +15127,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 !$0.isBrowserContentShortcut &&
                 matchConfiguredShortcut(event: event, shortcut: KeyboardShortcutSettings.shortcut(for: $0))
         }
+    }
+
+    /// The generic matcher's digit guard only knows the 1–9 number-row
+    /// keycodes, so an action bound to "0" (slot 0 = jot) falls through it.
+    /// Match the 0 key directly, but only while the action is actually bound
+    /// to "0" so rebinding in Settings still wins.
+    private func slotJotZeroKeyMatch(event: NSEvent) -> Bool {
+        let shortcut = KeyboardShortcutSettings.shortcut(for: .slotSelectJot)
+        guard !shortcut.isUnbound, !shortcut.hasChord, shortcut.firstStroke.key == "0" else { return false }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.numericPad, .function, .capsLock])
+        guard flags == shortcut.firstStroke.modifierFlags else { return false }
+        return event.keyCode == 29 || event.charactersIgnoringModifiers == "0"
     }
 
     private func numberedConfiguredShortcutDigit(

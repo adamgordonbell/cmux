@@ -5392,6 +5392,9 @@ struct CMUXCLI {
         case "markdown":
             try runMarkdownCommand(commandArgs: commandArgs, client: client, jsonOutput: jsonOutput, idFormat: idFormat)
 
+        case "slot":
+            try runSlotCommand(commandArgs: commandArgs, client: client, jsonOutput: jsonOutput)
+
         default:
             throw unknownCommandError(command)
         }
@@ -5461,6 +5464,43 @@ struct CMUXCLI {
     }
 
     // MARK: - Markdown Commands
+
+    /// `cmux slot <0-9>` — select a numbered workspace slot (self-healing for
+    /// slots 0/1). `cmux slot nuke|banish|unbanish` operate on the focused
+    /// workspace. Requires the slots feature (fork); see slots.json.
+    private func runSlotCommand(
+        commandArgs: [String],
+        client: SocketClient,
+        jsonOutput: Bool
+    ) throws {
+        guard let sub = commandArgs.first else {
+            throw CLIError(message: "Usage: cmux slot <0-9> | nuke | banish | unbanish")
+        }
+        let method: String
+        var params: [String: Any] = [:]
+        if let n = Int(sub), (0...9).contains(n) {
+            method = "slots.select"
+            params["slot"] = n
+        } else {
+            switch sub.lowercased() {
+            case "nuke": method = "slots.nuke"
+            case "banish": method = "slots.banish"
+            case "unbanish", "unbanish-all": method = "slots.unbanish_all"
+            default:
+                throw CLIError(message: "Usage: cmux slot <0-9> | nuke | banish | unbanish")
+            }
+        }
+        let payload = try client.sendV2(method: method, params: params)
+        if jsonOutput {
+            print(jsonString(payload))
+        } else {
+            let action = (payload["action"] as? String) ?? "ok"
+            var extra = ""
+            if let ws = payload["workspace_id"] as? String { extra += " workspace=\(ws)" }
+            if let count = payload["count"] as? Int { extra += " count=\(count)" }
+            print("OK action=\(action)\(extra)")
+        }
+    }
 
     private func runMarkdownCommand(
         commandArgs: [String],
