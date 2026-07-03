@@ -180,6 +180,13 @@ public protocol ControlSurfaceContext: AnyObject {
         hasSurfaceIDParam: Bool
     ) -> ControlSurfaceClearHistoryResolution
 
+    /// Reveals a surface for `surface.reveal`: selects its tab within its
+    /// pane without moving keyboard focus.
+    func controlSurfaceReveal(
+        routing: ControlRoutingSelectors,
+        surfaceID: UUID?
+    ) -> ControlSurfaceRevealResolution
+
     /// Triggers the focus flash for `surface.trigger_flash`.
     ///
     /// - Parameters:

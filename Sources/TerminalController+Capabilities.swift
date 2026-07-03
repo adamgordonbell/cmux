@@ -362,6 +362,7 @@ extension TerminalController {
             "app.simulate_active",
             "file.open",
             "markdown.open",
+            "surface.reveal",
             "slots.select",
             "slots.nuke",
             "slots.banish",
