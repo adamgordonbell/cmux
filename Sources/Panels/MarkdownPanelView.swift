@@ -27,6 +27,12 @@ struct MarkdownPanelView: View {
 
     @State private var focusFlashOpacity: Double = 0.0
     @State private var focusFlashAnimationGeneration: Int = 0
+    /// Bumped when the renderer's coordinator detects an orphaned webview
+    /// (visible panel, webview in no window — e.g. after a cross-pane move
+    /// raced the source pane's collapse). Changing the `.id` rebuilds the
+    /// representable, and `makeNSView` re-adopts the session-retained webview
+    /// into a live host.
+    @State private var webViewRehostGeneration = 0
     @State private var copyConfirmation: CopyConfirmation? = nil
     @State private var copyConfirmationGeneration: Int = 0
     @AppStorage(FilePreviewWordWrapSettings.key) private var fileEditorWordWrap = FilePreviewWordWrapSettings.defaultEnabled
@@ -90,8 +96,11 @@ struct MarkdownPanelView: View {
                 fontFamily: panel.fontFamily,
                 maxContentWidth: panel.maxContentWidth,
                 session: panel.rendererSession,
+                isVisibleInUI: isVisibleInUI && panel.displayMode == .preview,
+                onRequestRehost: { webViewRehostGeneration &+= 1 },
                 onRequestPanelFocus: onRequestPanelFocus
             )
+            .id(webViewRehostGeneration)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .opacity(panel.displayMode == .preview ? 1 : 0)
             .allowsHitTesting(panel.displayMode == .preview)
