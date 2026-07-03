@@ -97,6 +97,38 @@ extension ControlCommandCoordinator {
         }
     }
 
+    // MARK: - reveal
+
+    /// `surface.reveal` — select the surface's tab in its pane without moving
+    /// keyboard focus (preview tooling that must not steal focus mid-typing).
+    func surfaceReveal(_ params: [String: JSONValue]) -> ControlCallResult {
+        let routing = routingSelectors(params)
+        guard context?.controlSurfaceRoutingResolvesTabManager(routing: routing) ?? false else {
+            return .err(code: "unavailable", message: "TabManager not available", data: nil)
+        }
+        let resolution = context?.controlSurfaceReveal(
+            routing: routing,
+            surfaceID: uuid(params, "surface_id")
+        ) ?? .tabManagerUnavailable
+        switch resolution {
+        case .tabManagerUnavailable:
+            return .err(code: "unavailable", message: "TabManager not available", data: nil)
+        case .surfaceNotFound(let surfaceID):
+            return .err(
+                code: "not_found",
+                message: "Surface not found",
+                data: surfaceID.map { .object(["surface_id": .string($0.uuidString)]) }
+            )
+        case .revealed(let workspaceID, let surfaceID):
+            return .ok(.object([
+                "workspace_id": .string(workspaceID.uuidString),
+                "workspace_ref": ref(.workspace, workspaceID),
+                "surface_id": .string(surfaceID.uuidString),
+                "surface_ref": ref(.surface, surfaceID),
+            ]))
+        }
+    }
+
     // MARK: - clear_history
 
     /// `surface.clear_history` — clear a terminal surface's screen/history.

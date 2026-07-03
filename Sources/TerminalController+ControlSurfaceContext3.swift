@@ -31,6 +31,34 @@ extension TerminalController {
 
     // MARK: - refresh
 
+    func controlSurfaceReveal(
+        routing: ControlRoutingSelectors,
+        surfaceID: UUID?
+    ) -> ControlSurfaceRevealResolution {
+        guard let tabManager = resolveTabManager(routing: routing) else {
+            return .tabManagerUnavailable
+        }
+        guard let panelId = surfaceID ?? routing.surfaceID else {
+            return .surfaceNotFound(nil)
+        }
+        for ws in tabManager.tabs {
+            if let tabId = ws.surfaceIdFromPanelId(panelId) {
+                // revealTab selects WITHOUT bonsplit's focusPane and without the
+                // delegate round-trip (whose applyTabSelection defaults to
+                // reasserting AppKit first-responder). Then apply cmux's panel
+                // visibility side-effects with focus reassertion suppressed, so
+                // the tab becomes the pane's visible tab while keyboard focus
+                // stays wherever the user is typing.
+                ws.bonsplitController.revealTab(tabId)
+                if let paneId = ws.paneId(forPanelId: panelId) {
+                    ws.applyTabSelection(tabId: tabId, inPane: paneId, reassertAppKitFocus: false)
+                }
+                return .revealed(workspaceID: ws.id, surfaceID: panelId)
+            }
+        }
+        return .surfaceNotFound(panelId)
+    }
+
     func controlSurfaceRefresh(routing: ControlRoutingSelectors) -> ControlSurfaceRefreshResolution {
         guard let tabManager = resolveTabManager(routing: routing) else {
             return .tabManagerUnavailable
