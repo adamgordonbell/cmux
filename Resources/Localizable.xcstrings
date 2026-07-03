@@ -217765,6 +217765,23 @@
           }
         }
       }
+    },
+    "sidebar.pro.badge.dismiss": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide the Pro badge"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proバッジを非表示にする"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
