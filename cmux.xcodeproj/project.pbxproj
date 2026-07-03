@@ -2265,6 +2265,7 @@
 		CD0CFE6200000000CD0CFE62 /* HostSettingsActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0CFE6300000000CD0CFE63 /* HostSettingsActions.swift */; };
 		F79000000000000000000001 /* HostSettingsActionsLocalTmuxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79000000000000000000002 /* HostSettingsActionsLocalTmuxTests.swift */; };
 		809100000000000000000001 /* HostSettingsShortcutNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809100000000000000000002 /* HostSettingsShortcutNotificationTests.swift */; };
+		HL1075500751075007510750 /* HotkeyLegendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HL1075500751075007510751 /* HotkeyLegendView.swift */; };
 		F1C1AA21B7E84D10A1C10001 /* InactivePaneFirstClickFocusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C1AA20B7E84D10A1C10001 /* InactivePaneFirstClickFocusTests.swift */; };
 		7A0CE1000000000000000048 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 7A0CE1000000000000000022 /* InfoPlist.xcstrings */; };
 		DA7A10CA710E000000000004 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = DA7A10CA710E000000000002 /* InfoPlist.xcstrings */; };
@@ -6630,6 +6631,7 @@
 		CD0CFE6300000000CD0CFE63 /* HostSettingsActions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostSettingsActions.swift; sourceTree = "<group>"; };
 		F79000000000000000000002 /* HostSettingsActionsLocalTmuxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSettingsActionsLocalTmuxTests.swift; sourceTree = "<group>"; };
 		809100000000000000000002 /* HostSettingsShortcutNotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSettingsShortcutNotificationTests.swift; sourceTree = "<group>"; };
+		HL1075500751075007510751 /* HotkeyLegendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyLegendView.swift; sourceTree = "<group>"; };
 		F1C1AA20B7E84D10A1C10001 /* InactivePaneFirstClickFocusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InactivePaneFirstClickFocusTests.swift; sourceTree = "<group>"; };
 		7A0CE1000000000000000021 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7A0CE1000000000000000022 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -9899,6 +9901,7 @@
 				8295A0028295A0028295A002 /* CmuxAlertContent.swift */,
 				8295A0048295A0048295A004 /* CmuxAlertScrollableDetailsView.swift */,
 				WS1075500751075007510751 /* WorkspaceSlots.swift */,
+				HL1075500751075007510751 /* HotkeyLegendView.swift */,
 				CA1F0A02CA1F0A02CA1F0A02 /* CmuxModalAlertPresentation.swift */,
 				C9A57606C9A57606C9A57606 /* SidebarWorkspaceDropTargetWriters.swift */,
 				C9A57102C9A57102C9A57102 /* SidebarWorkspaceGroupHeaderView.swift */,
@@ -15212,6 +15215,7 @@
 				3EF3468DD8D24C4BAC075F30 /* InternalFlagOverrideChoice.swift in Sources */,
 				A8B8C4CA75764DD78650CDB9 /* InternalFlagRowSnapshot.swift in Sources */,
 				C0DEA7720000000000000001 /* InternalFlagsWindow.swift in Sources */,
+				HL1075500751075007510750 /* HotkeyLegendView.swift in Sources */,
 				4D8B37E0E11A29997632765F /* InternalTabDragConfiguration.swift in Sources */,
 				E7B200000000000000000001 /* IrohTransportDebugMenuButtons.swift in Sources */,
 				A5FB1307 /* JSONCObjectEditor+Remove.swift in Sources */,
