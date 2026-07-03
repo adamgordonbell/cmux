@@ -199,6 +199,36 @@ extension TerminalController: ControlProjectContext {
         v2MaybeFocusWindow(for: tabManager)
         v2MaybeSelectWorkspace(tabManager, workspace: ws)
 
+        if fontSizeInvalid {
+            return .invalidFontSize
+        }
+        let clampedFontSize = fontSize.map { MarkdownFontSizeSettings.clamp($0) }
+
+        // An explicit `pane_id` opens the markdown surface as a tab in that
+        // existing pane (no split, no source surface) — the same shape as
+        // `project.open`'s `newProjectSurface(inPane:)`.
+        if let paneUUID = routing.paneID {
+            guard let paneId = ws.bonsplitController.allPaneIds.first(where: { $0.id == paneUUID }) else {
+                return .paneNotFound(paneUUID)
+            }
+            guard let panel = ws.newMarkdownSurface(
+                inPane: paneId,
+                filePath: filePath,
+                focus: v2FocusAllowed(requested: requestedFocus),
+                fontSize: clampedFontSize
+            ) else {
+                return .createFailed
+            }
+            return .opened(ControlMarkdownOpenResolution.Created(
+                windowID: v2ResolveWindowId(tabManager: tabManager),
+                workspaceID: ws.id,
+                targetPaneID: paneUUID,
+                surfaceID: panel.id,
+                sourceSurfaceID: nil,
+                sourcePaneID: nil
+            ))
+        }
+
         let sourceSurfaceId = surfaceID ?? ws.focusedPanelId
         guard let sourceSurfaceId else {
             return .noFocusedSurface
@@ -214,11 +244,6 @@ extension TerminalController: ControlProjectContext {
         }
         let orientation: SplitOrientation = direction.isHorizontal ? .horizontal : .vertical
         let insertFirst = (direction == .left || direction == .up)
-
-        if fontSizeInvalid {
-            return .invalidFontSize
-        }
-        let clampedFontSize = fontSize.map { MarkdownFontSizeSettings.clamp($0) }
 
         let createdPanel = ws.newMarkdownSplit(
             from: sourceSurfaceId,

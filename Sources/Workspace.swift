@@ -10297,7 +10297,8 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
         inPane paneId: PaneID,
         filePath: String,
         focus: Bool? = nil,
-        targetIndex: Int? = nil
+        targetIndex: Int? = nil,
+        fontSize: Double? = nil
     ) -> MarkdownPanel? {
         guard !isRetiredFromOwningTabManager else { return nil }
         let shouldFocusNewTab = focus ?? (bonsplitController.focusedPaneId == paneId)
@@ -10307,6 +10308,7 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
         let markdownPanel = MarkdownPanel(
             workspaceId: id,
             filePath: filePath,
+            fontSize: fontSize,
             fileContentChangeCoordinator: fileContentChangeCoordinator
         )
         panels[markdownPanel.id] = markdownPanel

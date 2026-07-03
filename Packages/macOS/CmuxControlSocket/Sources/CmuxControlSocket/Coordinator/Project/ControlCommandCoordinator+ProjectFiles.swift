@@ -45,6 +45,12 @@ extension ControlCommandCoordinator {
                 message: "Source surface not found",
                 data: .object(["surface_id": .string(surfaceID.uuidString)])
             )
+        case .paneNotFound(let paneID):
+            return .err(
+                code: "not_found",
+                message: "Pane not found",
+                data: .object(["pane_id": .string(paneID.uuidString)])
+            )
         case .invalidDirection:
             return .err(
                 code: "invalid_params",
@@ -65,7 +71,7 @@ extension ControlCommandCoordinator {
                 "pane_ref": ref(.pane, created.targetPaneID),
                 "surface_id": .string(created.surfaceID.uuidString),
                 "surface_ref": ref(.surface, created.surfaceID),
-                "source_surface_id": .string(created.sourceSurfaceID.uuidString),
+                "source_surface_id": orNull(created.sourceSurfaceID?.uuidString),
                 "source_surface_ref": ref(.surface, created.sourceSurfaceID),
                 "source_pane_id": orNull(created.sourcePaneID?.uuidString),
                 "source_pane_ref": ref(.pane, created.sourcePaneID),
