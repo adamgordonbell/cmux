@@ -141,6 +141,7 @@ enum WorkspaceSlots {
     @discardableResult
     static func select(_ slot: Int, tabManager: TabManager) -> SelectOutcome {
         guard (0...9).contains(slot) else { return .failed("slot out of range") }
+        autonameScratches(in: tabManager)
         if slot <= 1 {
             return selectPlanningSlot(slot, tabManager: tabManager)
         }
@@ -294,6 +295,7 @@ enum WorkspaceSlots {
         if let fallback {
             tabManager.selectTab(fallback)
         }
+        sinkBanishedGroup(in: tabManager)
         return .banished(workspaceID: ws.id)
     }
 
@@ -313,7 +315,60 @@ enum WorkspaceSlots {
         for ws in members {
             tabManager.removeWorkspaceFromGroup(workspaceId: ws.id)
         }
+        sinkBanishedGroup(in: tabManager)
         return .unbanished(count: members.count)
+    }
+
+    /// Keep the parked pile out of the way: the banished group always sits at
+    /// the BOTTOM of the sidebar instead of wherever its anchor happened to be
+    /// when the first workspace was parked.
+    private static func sinkBanishedGroup(in tabManager: TabManager) {
+        guard let group = banishedGroup(in: tabManager) else { return }
+        tabManager.moveWorkspaceGroup(groupId: group.id, toIndex: tabManager.tabs.count)
+    }
+
+    // MARK: - Autoname
+
+    /// Titles that aren't a real session topic yet — keep (or restore) the
+    /// generic `scratch N` name until one lands.
+    private static let genericTabTitles: Set<String> = ["", "claude code", "cc-pick", "zsh", "-zsh", "terminal"]
+
+    /// Keep every scratch workspace named after its Claude session's current
+    /// topic (ported from the cmux-slot python, which ran this on each ⌘0–9
+    /// press). The topic source is the claude tab's own title: cmux's
+    /// auto-name hook already writes summary-quality names there. When Claude
+    /// is running but topicless (fresh launch or /clear), reset to the
+    /// generic name so a stale topic doesn't persist. Planning and banished
+    /// workspaces are excluded by slotWorkspaces.
+    static func autonameScratches(in tabManager: TabManager) {
+        for (i, ws) in slotWorkspaces(in: tabManager).enumerated() {
+            let titles = terminalPanels(in: ws).map { panelTitle($0, in: ws) }
+            guard let claudeTitle = titles.first(where: { claudeIshTitle($0) }) else {
+                continue  // no claude here — leave the name alone
+            }
+            let topic = cleanedTopic(claudeTitle)
+            let current = ws.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let topic {
+                if current != topic { ws.title = topic }
+            } else if !current.lowercased().hasPrefix("scratch ") {
+                // Claude is running but has no topic (booting / just cleared):
+                // drop the stale previous-topic name.
+                ws.title = "scratch \(i + 1)"
+            }
+        }
+    }
+
+    /// Strip the leading status glyph (✳ or a braille spinner) and reject
+    /// junk: generic labels and bare paths.
+    private static func cleanedTopic(_ tabTitle: String) -> String? {
+        var t = tabTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let first = t.unicodeScalars.first,
+           first == "\u{2733}" || (0x2800...0x28FF).contains(Int(first.value)) {
+            t = String(t.unicodeScalars.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if genericTabTitles.contains(t.lowercased()) { return nil }
+        if t.hasPrefix("~") || t.hasPrefix("/") { return nil }
+        return t
     }
 
     // MARK: - Helpers
