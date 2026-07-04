@@ -324,7 +324,14 @@ enum WorkspaceSlots {
     /// when the first workspace was parked.
     private static func sinkBanishedGroup(in tabManager: TabManager) {
         guard let group = banishedGroup(in: tabManager) else { return }
-        tabManager.moveWorkspaceGroup(groupId: group.id, toIndex: tabManager.tabs.count)
+        // moveWorkspaceGroup reorders among GROUPS (a no-op with one group);
+        // sidebar position comes from the anchor's slot in tabs[]. Moving the
+        // anchor to the end pulls the members with it via the coordinator's
+        // group-contiguity normalization.
+        _ = tabManager.reorderWorkspace(
+            tabId: group.anchorWorkspaceId,
+            toIndex: max(0, tabManager.tabs.count - 1)
+        )
     }
 
     // MARK: - Autoname
