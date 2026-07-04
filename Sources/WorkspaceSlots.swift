@@ -193,7 +193,24 @@ enum WorkspaceSlots {
         let command = expandPath(role.command)
         let healedPanelId: UUID?
         if let target {
-            _ = target.sendInputResult(command + "\r")
+            let tty = planning.surfaceTTYNames[target.id]
+            if tty == nil || tty?.isEmpty == true {
+                // Startup race: right after app launch the restored shell hasn't
+                // registered its tty yet (and may still be spawning) — a command
+                // typed now is swallowed, and agent-resume may be about to
+                // relaunch the agent itself. Defer: re-check liveness once the
+                // shell settles and only type if it's still dead.
+                let panelId = target.id
+                let processName = cfg.processName
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak planning, weak target] in
+                    guard let planning, let target else { return }
+                    if !processAlive(processName, onTTY: planning.surfaceTTYNames[panelId]) {
+                        _ = target.sendInputResult(command + "\r")
+                    }
+                }
+            } else {
+                _ = target.sendInputResult(command + "\r")
+            }
             healedPanelId = target.id
         } else {
             let pane = leftmostPane(in: planning)
