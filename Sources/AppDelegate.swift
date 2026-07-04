@@ -12801,6 +12801,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return false
         }
 
+        // Workspace slots (fork): when enabled, the slot actions own their keys
+        // and are consumed before EVERY stock matcher in this dispatch — not
+        // just the numbered-workspace fallback. Stock actions share defaults
+        // with slot keys (jumpToUnread is also ⌘⇧U), and matching order is the
+        // only tiebreak, so the slots block must run first.
+        if WorkspaceSlots.isEnabled {
+            if let digit = routableNumberedConfiguredShortcutDigit(event: event, action: .slotSelect) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+#if DEBUG
+                    cmuxDebugLog("shortcut.action name=slotSelect digit=\(digit)")
+#endif
+                    WorkspaceSlots.select(digit, tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .slotSelectJot) || slotJotZeroKeyMatch(event: event) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.select(0, tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .nukeWorkspace) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.nukeFocused(tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .banishWorkspace) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.banishFocused(tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .unbanishAllWorkspaces) {
+                if let manager = tabManagerForNumberedShortcut(event: event) {
+                    WorkspaceSlots.unbanishAll(tabManager: manager)
+                }
+                return true
+            }
+            if matchConfiguredShortcut(event: event, action: .toggleHotkeyLegend) {
+                HotkeyLegendState.shared.toggle()
+                return true
+            }
+        }
+
+
         // `charactersIgnoringModifiers` can be nil for some synthetic NSEvents and certain special keys.
         // Treat nil as "" and rely on keyCode/layout-aware fallback logic where needed.
         // When a non-Latin input source is active (Korean, Chinese, Japanese, etc.),
@@ -13716,48 +13762,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return true
         }
 
-        // Workspace slots (fork): when enabled, the slot actions own their keys
-        // and are consumed before the stock numbered-workspace fallback, so the
-        // same keystroke can never race between two orderings.
-        if WorkspaceSlots.isEnabled {
-            if let digit = routableNumberedConfiguredShortcutDigit(event: event, action: .slotSelect) {
-                if let manager = tabManagerForNumberedShortcut(event: event) {
-#if DEBUG
-                    cmuxDebugLog("shortcut.action name=slotSelect digit=\(digit)")
-#endif
-                    WorkspaceSlots.select(digit, tabManager: manager)
-                }
-                return true
-            }
-            if matchConfiguredShortcut(event: event, action: .slotSelectJot) || slotJotZeroKeyMatch(event: event) {
-                if let manager = tabManagerForNumberedShortcut(event: event) {
-                    WorkspaceSlots.select(0, tabManager: manager)
-                }
-                return true
-            }
-            if matchConfiguredShortcut(event: event, action: .nukeWorkspace) {
-                if let manager = tabManagerForNumberedShortcut(event: event) {
-                    WorkspaceSlots.nukeFocused(tabManager: manager)
-                }
-                return true
-            }
-            if matchConfiguredShortcut(event: event, action: .banishWorkspace) {
-                if let manager = tabManagerForNumberedShortcut(event: event) {
-                    WorkspaceSlots.banishFocused(tabManager: manager)
-                }
-                return true
-            }
-            if matchConfiguredShortcut(event: event, action: .unbanishAllWorkspaces) {
-                if let manager = tabManagerForNumberedShortcut(event: event) {
-                    WorkspaceSlots.unbanishAll(tabManager: manager)
-                }
-                return true
-            }
-            if matchConfiguredShortcut(event: event, action: .toggleHotkeyLegend) {
-                HotkeyLegendState.shared.toggle()
-                return true
-            }
-        }
 
         // Numeric shortcuts for specific workspaces (9 = last workspace)
         // Always consume the event when the digit matches to prevent Ghostty's
