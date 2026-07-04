@@ -87,15 +87,15 @@ extension TerminalController {
         for ws in tabManager.tabs {
             if let tabId = ws.surfaceIdFromPanelId(panelId) {
                 // revealTab selects WITHOUT bonsplit's focusPane and without the
-                // delegate round-trip (whose applyTabSelection defaults to
-                // reasserting AppKit first-responder). Then apply cmux's panel
-                // visibility side-effects with focus reassertion suppressed, so
-                // the tab becomes the pane's visible tab while keyboard focus
-                // stays wherever the user is typing.
+                // delegate round-trip. That alone is enough for content:
+                // panelVisibleInUI derives from bonsplit's isSelectedInPane, so
+                // the pane shows the tab. Deliberately NO applyTabSelection —
+                // even with reassertAppKitFocus:false it force-focuses the
+                // revealed pane (applyTabSelectionNow calls focusPane), which
+                // is the exact focus steal reveal exists to avoid. Terminal
+                // resume/first-responder side-effects only run on a real
+                // selection (click / select-tab), not on reveal.
                 ws.bonsplitController.revealTab(tabId)
-                if let paneId = ws.paneId(forPanelId: panelId) {
-                    ws.applyTabSelection(tabId: tabId, inPane: paneId, reassertAppKitFocus: false)
-                }
                 return .revealed(workspaceID: ws.id, surfaceID: panelId)
             }
         }
