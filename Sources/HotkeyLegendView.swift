@@ -56,13 +56,13 @@ struct HotkeyLegendPanel: View {
 
     var body: some View {
         if WorkspaceSlots.isEnabled, state.isVisible {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 7) {
                 ForEach(rows) { row in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(row.keys)
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
-                            .frame(minWidth: 58, alignment: .leading)
+                            .frame(minWidth: 64, alignment: .leading)
                         Text(row.label)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
