@@ -41,18 +41,14 @@ struct HotkeyLegendPanel: View {
             (.nukeWorkspace, "nuke workspace"),
             (.banishWorkspace, "banish"),
             (.unbanishAllWorkspaces, "unbanish all"),
+            (.toggleMarkdownEditMode, "markdown edit/preview (saves)"),
             (.toggleHotkeyLegend, "this legend"),
         ]
-        var out: [Row] = actions.compactMap { action, label in
+        return actions.compactMap { action, label in
             let shortcut = KeyboardShortcutSettings.shortcut(for: action)
             guard !shortcut.isUnbound else { return nil }
             return Row(keys: action.displayedShortcutString(for: shortcut), label: label)
         }
-        // Not a configurable Action (bound in Hammerspoon, driving the
-        // markdown.set_mode verb), but part of the working set the old HUD
-        // listed. Leaving edit mode saves the file.
-        out.append(Row(keys: "⌃⌥E", label: "markdown edit/preview (saves)"))
-        return out
     }
 
     /// What each modifier glyph means — Adam's keyboard doesn't print them.
