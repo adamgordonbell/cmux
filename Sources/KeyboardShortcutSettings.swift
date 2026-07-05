@@ -175,6 +175,10 @@ enum KeyboardShortcutSettings {
         case markdownZoomIn
         case markdownZoomOut
         case markdownZoomReset
+        // Fork: flips the focused (or visible) markdown surface between
+        // preview and the text editor; leaving the editor saves. App-wide, so
+        // it works while typing in a terminal next to a revealed preview.
+        case toggleMarkdownEditMode
         case find
         case findInDirectory
         case findNext
@@ -298,6 +302,7 @@ enum KeyboardShortcutSettings {
             case .markdownZoomIn: return String(localized: "shortcut.markdownZoomIn.label", defaultValue: "Markdown Viewer: Zoom In")
             case .markdownZoomOut: return String(localized: "shortcut.markdownZoomOut.label", defaultValue: "Markdown Viewer: Zoom Out")
             case .markdownZoomReset: return String(localized: "shortcut.markdownZoomReset.label", defaultValue: "Markdown Viewer: Actual Size")
+            case .toggleMarkdownEditMode: return String(localized: "shortcut.toggleMarkdownEditMode.label", defaultValue: "Markdown: Toggle Edit/Preview (Saves)")
             case .find: return String(localized: "menu.find.find", defaultValue: "Find…")
             case .findInDirectory: return String(localized: "menu.find.findInDirectory", defaultValue: "Find in Directory…")
             case .findNext: return String(localized: "menu.find.findNext", defaultValue: "Find Next")
@@ -553,6 +558,11 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "-", command: true, shift: false, option: false, control: false)
             case .markdownZoomReset:
                 return StoredShortcut(key: "0", command: true, shift: false, option: false, control: false)
+            case .toggleMarkdownEditMode:
+                // ⌃⌥E — inherited from the retired Hammerspoon binding; a
+                // ctrl+opt chord no cmux default uses, and rare as terminal
+                // input, so consuming it app-wide is safe.
+                return StoredShortcut(key: "e", command: false, shift: false, option: true, control: true)
             case .find:
                 return StoredShortcut(key: "f", command: true, shift: false, option: false, control: false)
             case .findInDirectory:

@@ -43,6 +43,42 @@ extension TabManager {
         return panel
     }
 
+    /// Toggles the focused markdown panel between preview and the text editor
+    /// (fork, `toggleMarkdownEditMode`). When focus sits elsewhere — the common
+    /// case: typing in a terminal beside a preview that `surface.reveal` opened
+    /// without stealing focus — falls back to the first visible
+    /// (selected-in-pane) markdown surface in the selected workspace. Leaving
+    /// the editor saves dirty content, matching the `markdown.set_mode` verb.
+    @discardableResult
+    func toggleMarkdownEditModeFromCurrentFocus() -> Bool {
+        guard let workspace = selectedWorkspace else { return false }
+
+        var target: MarkdownPanel?
+        if let panelId = workspace.focusedPanelId,
+           let panel = workspace.panels[panelId] as? MarkdownPanel {
+            target = panel
+        } else {
+            for paneId in workspace.bonsplitController.allPaneIds {
+                guard let tabId = workspace.bonsplitController.selectedTab(inPane: paneId)?.id,
+                      let panelId = workspace.panelIdFromSurfaceId(tabId),
+                      let panel = workspace.panels[panelId] as? MarkdownPanel else { continue }
+                target = panel
+                break
+            }
+        }
+        guard let panel = target else { return false }
+
+        if panel.displayMode == .text {
+            if panel.isDirty {
+                _ = panel.saveTextContent()
+            }
+            panel.setDisplayMode(.preview)
+        } else {
+            panel.setDisplayMode(.text)
+        }
+        return true
+    }
+
     @discardableResult
     func zoomInFocusedTextFilePreview() -> Bool {
         performFocusedTextFilePreviewZoom { $0.zoomTextPreviewIn() } ?? false

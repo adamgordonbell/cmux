@@ -13971,6 +13971,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return shortcutEventMarkdownPanel(event)?.resetZoom() ?? false
         }
 
+        // Fork: markdown edit/preview toggle. App-wide (not markdown-scoped):
+        // the target is resolved by TabManager, falling back to the visible
+        // markdown surface when focus is in a terminal.
+        if matchConfiguredShortcut(event: event, action: .toggleMarkdownEditMode) {
+            let routedManager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            return routedManager?.toggleMarkdownEditModeFromCurrentFocus() ?? false
+        }
+
         if matchConfiguredShortcut(event: event, action: .findInDirectory) {
             return focusFileSearchInActiveMainWindow(preferredWindow: resolvedShortcutEventWindow(event))
         }
