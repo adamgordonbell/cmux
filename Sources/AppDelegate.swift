@@ -6700,7 +6700,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             requiresWindowFocus = true
         case .setMode(_, let focus):
             requiresWindowFocus = focus
-        case .toggle, .show, .hide, .getState:
+        case .toggle, .show, .hide, .getState, .setFilesRoot:
             requiresWindowFocus = false
         }
         if requiresWindowFocus, !target.isActiveTarget, preferredWindow == nil {
@@ -6758,6 +6758,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 state.mode = mode
                 context?.keyboardFocusCoordinator.rememberRightSidebarMode(mode)
             }
+            return .ok
+        case .setFilesRoot(let path):
+            guard let manager = context?.tabManager ?? tabManager else {
+                return .failure(String(localized: "rightSidebar.remote.error.targetNotFound", defaultValue: "ERROR: Right sidebar target not found"))
+            }
+            let workspace: Workspace?
+            if let workspaceId = target.workspaceId {
+                workspace = manager.tabs.first(where: { $0.id == workspaceId })
+            } else {
+                workspace = manager.selectedTabId.flatMap { id in manager.tabs.first(where: { $0.id == id }) }
+            }
+            guard let workspace else {
+                return .failure(String(localized: "rightSidebar.remote.error.targetNotFound", defaultValue: "ERROR: Right sidebar target not found"))
+            }
+            guard let path else {
+                workspace.fileExplorerRootOverride = nil
+                return .ok
+            }
+            guard !workspace.isRemoteWorkspace else {
+                return .failure(String(localized: "rightSidebar.remote.error.setRootRemote", defaultValue: "ERROR: set-root is not supported for remote workspaces"))
+            }
+            let expanded = (path as NSString).expandingTildeInPath
+            var isDirectory: ObjCBool = false
+            guard expanded.hasPrefix("/"),
+                  FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                return .failure(String(localized: "rightSidebar.remote.error.setRootNotDirectory", defaultValue: "ERROR: Not an absolute path to a directory: '\(path)'"))
+            }
+            workspace.fileExplorerRootOverride = expanded
             return .ok
         case .getState:
             return .state(.init(visible: state.isVisible, modeRawValue: state.rightSidebarRemoteModeRawValue))
