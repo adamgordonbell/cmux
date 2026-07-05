@@ -80,10 +80,7 @@ extension TabManager {
         guard let panel = target else { return false }
 
         if panel.displayMode == .text {
-            if panel.isDirty {
-                _ = panel.saveTextContent()
-            }
-            panel.setDisplayMode(.preview)
+            panel.showPreviewCommittingEdits()
         } else {
             panel.setDisplayMode(.text)
         }
