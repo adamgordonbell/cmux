@@ -48,11 +48,20 @@ struct HotkeyLegendPanel: View {
             guard !shortcut.isUnbound else { return nil }
             return Row(keys: action.displayedShortcutString(for: shortcut), label: label)
         }
-        // Not a configurable Action (markdown panel handles it internally),
-        // but part of the working set the old HUD listed.
-        out.append(Row(keys: "⌃⌥E", label: "markdown edit/preview"))
+        // Not a configurable Action (bound in Hammerspoon, driving the
+        // markdown.set_mode verb), but part of the working set the old HUD
+        // listed. Leaving edit mode saves the file.
+        out.append(Row(keys: "⌃⌥E", label: "markdown edit/preview (saves)"))
         return out
     }
+
+    /// What each modifier glyph means — Adam's keyboard doesn't print them.
+    private static let modifierKey: [(String, String)] = [
+        ("⌘", "cmd"),
+        ("⌃", "ctrl"),
+        ("⌥", "opt/alt"),
+        ("⇧", "shift"),
+    ]
 
     var body: some View {
         if WorkspaceSlots.isEnabled, state.isVisible {
@@ -67,6 +76,20 @@ struct HotkeyLegendPanel: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                    }
+                }
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    ForEach(Self.modifierKey, id: \.0) { glyph, name in
+                        HStack(spacing: 3) {
+                            Text(glyph)
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            Text(name)
+                                .font(.system(size: 10))
+                        }
+                        .foregroundStyle(.tertiary)
                     }
                 }
             }
