@@ -267,6 +267,19 @@ final class MarkdownPanel: Panel, ObservableObject, FilePreviewTextEditingPanel 
         }
     }
 
+    /// Switches to the preview, committing any dirty edits to disk first —
+    /// the single interactive contract for every preview-switch entry point
+    /// (header eye button, the edit-toggle shortcut, `markdown.set_mode`).
+    /// Deliberately not gated on `isDirty`: `saveTextContent()` reads the
+    /// live text view and no-ops when the content matches disk, so this can
+    /// never lose an edit `isDirty` missed.
+    func showPreviewCommittingEdits() {
+        if displayMode == .text {
+            _ = saveTextContent()
+        }
+        setDisplayMode(.preview)
+    }
+
     func attachTextView(_ textView: NSTextView) {
         self.textView = textView
     }

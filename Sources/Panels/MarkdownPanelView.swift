@@ -126,7 +126,10 @@ struct MarkdownPanelView: View {
             filePath: panel.filePath,
             foregroundColor: themeForegroundColor
         ) {
-            if panel.displayMode == .text {
+            // Also shown in preview mode while dirty: normally leaving the
+            // editor saves, so a dirty preview means a save FAILED — without
+            // these buttons that state would have no affordance at all.
+            if panel.displayMode == .text || panel.isDirty {
                 PanelHeaderIconButton(
                     systemName: "arrow.counterclockwise",
                     label: String(localized: "markdown.toolbar.revert", defaultValue: "Revert"),
@@ -169,7 +172,7 @@ struct MarkdownPanelView: View {
             PanelHeaderIconButton(
                 systemName: "eye",
                 label: String(localized: "markdown.mode.showPreview", defaultValue: "Show Preview"),
-                action: { panel.setDisplayMode(.preview) }
+                action: { panel.showPreviewCommittingEdits() }
             )
         }
     }
