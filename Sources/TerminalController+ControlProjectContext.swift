@@ -307,14 +307,16 @@ extension TerminalController: ControlProjectContext {
         }
 
         // Match the interactive contract: leaving the text editor commits the
-        // edit (unless the caller opts out with save=false).
+        // edit (unless the caller opts out with save=false). Not gated on
+        // isDirty — showPreviewCommittingEdits reads the live text view and
+        // no-ops when clean, so a stale dirty flag can never skip a save.
         var saved = false
-        if markdownPanel.displayMode == .text, target == .preview,
-           save, markdownPanel.isDirty {
-            _ = markdownPanel.saveTextContent()
-            saved = true
+        if markdownPanel.displayMode == .text, target == .preview, save {
+            saved = markdownPanel.isDirty
+            markdownPanel.showPreviewCommittingEdits()
+        } else {
+            markdownPanel.setDisplayMode(target)
         }
-        markdownPanel.setDisplayMode(target)
         return .set(
             workspaceID: ws.id,
             surfaceID: targetSurfaceId,
