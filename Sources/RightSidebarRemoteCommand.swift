@@ -22,6 +22,8 @@ enum RightSidebarRemoteCommand: Equatable, Sendable {
     case hide
     case focus
     case setMode(RightSidebarMode, focus: Bool)
+    // nil clears the override back to following the shell cwd.
+    case setFilesRoot(String?)
     case getState
 }
 
@@ -102,7 +104,7 @@ extension RightSidebarRemoteRequest {
         }
 
         guard let action = positional.first?.lowercased() else {
-            return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage", defaultValue: "ERROR: Usage: right_sidebar <toggle|show|hide|focus|set|mode> [mode] [--workspace=<workspace-id>] [--window=<window-id>] [--no-focus]")))
+            return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage", defaultValue: "ERROR: Usage: right_sidebar <toggle|show|hide|focus|set|mode|set-root> [mode|path] [--workspace=<workspace-id>] [--window=<window-id>] [--no-focus]")))
         }
 
         switch action {
@@ -131,6 +133,17 @@ extension RightSidebarRemoteRequest {
                 return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.mode", defaultValue: "ERROR: Usage: right_sidebar mode [--workspace=<workspace-id>] [--window=<window-id>]")))
             }
             return .success(.init(command: .getState, target: target))
+        case "set-root":
+            guard positional.count == 2, !noFocus else {
+                return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.setRoot", defaultValue: "ERROR: Usage: right_sidebar set-root <path|auto> [--workspace=<workspace-id>] [--window=<window-id>]")))
+            }
+            let rawPath = positional[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !rawPath.isEmpty else {
+                return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.setRoot", defaultValue: "ERROR: Usage: right_sidebar set-root <path|auto> [--workspace=<workspace-id>] [--window=<window-id>]")))
+            }
+            let lowered = rawPath.lowercased()
+            let clearsOverride = lowered == "auto" || lowered == "clear"
+            return .success(.init(command: .setFilesRoot(clearsOverride ? nil : rawPath), target: target))
         case "set":
             guard positional.count == 2 else {
                 return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.set", defaultValue: "ERROR: Usage: right_sidebar set <files|find|vault|sessions|feed|dock> [--no-focus] [--workspace=<workspace-id>] [--window=<window-id>]")))

@@ -2019,6 +2019,9 @@ final class Workspace: Identifiable, ObservableObject {
             )
         }
     }
+    // CLI-set override for the files sidebar root (`right-sidebar set-root`).
+    // In-memory only — not persisted; nil means follow currentDirectory.
+    @Published var fileExplorerRootOverride: String?
     @Published private(set) var extensionSidebarProjectRootPath: String?
     private var extensionSidebarProjectRootRefreshID: UInt64 = 0
     @Published private(set) var surfaceTabBarDirectory: String?

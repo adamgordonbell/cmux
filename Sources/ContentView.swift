@@ -713,6 +713,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
     private struct Snapshot: Equatable {
         let workspaceId: UUID?
         let currentDirectory: String?
+        let filesRootOverride: String?
         let remoteConfiguration: WorkspaceRemoteConfiguration?
         let remoteConnectionState: WorkspaceRemoteConnectionState?
         let remoteConnectionDetail: String?
@@ -739,6 +740,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                         Snapshot(
                             workspaceId: nil,
                             currentDirectory: nil,
+                            filesRootOverride: nil,
                             remoteConfiguration: nil,
                             remoteConnectionState: nil,
                             remoteConnectionDetail: nil,
@@ -758,13 +760,15 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                     )
                     .combineLatest(
                         workspace.$remoteDaemonStatus,
-                        workspace.$activeRemoteTerminalSessionCount
+                        workspace.$activeRemoteTerminalSessionCount,
+                        workspace.$fileExplorerRootOverride
                     )
                     .map { values in
                         let (
                             previousValues,
                             remoteDaemonStatus,
-                            activeRemoteTerminalSessionCount
+                            activeRemoteTerminalSessionCount,
+                            filesRootOverride
                         ) = values
                         let (
                             currentDirectory,
@@ -777,6 +781,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                             currentDirectory: workspace.isRemoteWorkspace
                                 ? workspace.presentedCurrentDirectory
                                 : currentDirectory,
+                            filesRootOverride: filesRootOverride,
                             remoteConfiguration: remoteConfiguration,
                             remoteConnectionState: remoteConnectionState,
                             remoteConnectionDetail: remoteConnectionDetail,
@@ -2433,18 +2438,22 @@ struct ContentView: View {
         }
 
         let dir = tab.currentDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !dir.isEmpty else {
+        let overrideDir = tab.fileExplorerRootOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // The files sidebar prefers the CLI-set root override; the sessions
+        // panel keeps scoping by the live shell cwd.
+        let rootDir = overrideDir.isEmpty ? dir : overrideDir
+        guard !rootDir.isEmpty else {
             sessionIndexStore.setCurrentDirectoryIfChanged(nil)
             fileExplorerStore.applyWorkspaceRoot(.none)
             return
         }
 
-        sessionIndexStore.setCurrentDirectoryIfChanged(dir)
+        sessionIndexStore.setCurrentDirectoryIfChanged(dir.isEmpty ? nil : dir)
         guard shouldSyncFileExplorerStore else {
             fileExplorerStore.applyWorkspaceRoot(.none)
             return
         }
-        fileExplorerStore.applyWorkspaceRoot(.local(workspaceId: tab.id, path: dir))
+        fileExplorerStore.applyWorkspaceRoot(.local(workspaceId: tab.id, path: rootDir))
     }
 
     private var shouldSyncFileExplorerStore: Bool {
