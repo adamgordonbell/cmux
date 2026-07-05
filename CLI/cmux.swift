@@ -21184,6 +21184,8 @@ struct CMUXCLI {
                                              ~/.config/cmux/sidebars as a right panel;
                                              the optional name picks which one.
               mode                           Print {"visible":bool,"mode":string}
+              set-root <path|auto>           Pin the files panel root to a directory
+                                             (in-memory; 'auto' resumes following the shell cwd)
               files|find|vault|sessions|feed|dock|cloud|devices|custom
                                              Alias for show + set + focus
 
@@ -21197,6 +21199,8 @@ struct CMUXCLI {
               cmux right-sidebar set find
               cmux right-sidebar set custom panel-info
               cmux right-sidebar mode
+              cmux right-sidebar set-root ~/sandbox/myproject
+              cmux right-sidebar set-root auto
             """)
         case "sidebar":
             return String(localized: "cli.sidebar.usage", defaultValue: """
@@ -22110,6 +22114,25 @@ struct CMUXCLI {
                 args.append("--no-focus")
             }
             return args
+
+        case "set-root":
+            guard parsed.positional.count == 2 else {
+                throw CLIError(message: String(localized: "cli.rightSidebar.error.setRootRequiresPath", defaultValue: "right-sidebar set-root requires a path (or 'auto' to follow the shell cwd again)"))
+            }
+            guard !parsed.noFocus else {
+                throw CLIError(message: String(localized: "cli.rightSidebar.error.noFocusOnlySet", defaultValue: "right-sidebar: --no-focus is only valid with set"))
+            }
+            let rawPath = parsed.positional[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowered = rawPath.lowercased()
+            if lowered == "auto" || lowered == "clear" {
+                return ["set-root", "auto"]
+            }
+            // Resolve relative to the CLI's cwd; the app can't do that server-side.
+            let expanded = (rawPath as NSString).expandingTildeInPath
+            let absolute = expanded.hasPrefix("/")
+                ? expanded
+                : URL(fileURLWithPath: expanded, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).standardizedFileURL.path
+            return ["set-root", absolute]
 
         case "files", "find", "vault", "sessions", "feed", "dock", "cloud", "machines", "devices", "custom", "custom-sidebar":
             guard parsed.positional.count == 1 else {

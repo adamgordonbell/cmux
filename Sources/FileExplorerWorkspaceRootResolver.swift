@@ -114,7 +114,12 @@ struct FileExplorerWorkspaceRootResolver {
                 unavailableDetail: workspace.remoteConnectionDetail ?? workspace.remoteDaemonStatus.detail
             )
         }
-        let path = workspace.currentDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Fork: a pinned root (`right-sidebar set-root`, "Set as Root") wins over
+        // the shell cwd for local workspaces.
+        let pinned = workspace.fileExplorerRootOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let path = pinned.isEmpty
+            ? workspace.currentDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+            : pinned
         // A local workspace may not have reported a cwd yet (fresh and
         // restored workspaces do this briefly).  Files still belongs to this
         // Mac; use its home directory instead of dropping the root entirely.

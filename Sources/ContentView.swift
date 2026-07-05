@@ -726,6 +726,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
     private struct Snapshot: Equatable {
         let workspaceId: UUID?
         let currentDirectory: String?
+        let filesRootOverride: String?
         let remoteConfiguration: WorkspaceRemoteConfiguration?
         let remoteConnectionState: WorkspaceRemoteConnectionState?
         let remoteConnectionDetail: String?
@@ -752,6 +753,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                         Snapshot(
                             workspaceId: nil,
                             currentDirectory: nil,
+                            filesRootOverride: nil,
                             remoteConfiguration: nil,
                             remoteConnectionState: nil,
                             remoteConnectionDetail: nil,
@@ -771,13 +773,15 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                     )
                     .combineLatest(
                         workspace.$remoteDaemonStatus,
-                        workspace.$activeRemoteTerminalSessionCount
+                        workspace.$activeRemoteTerminalSessionCount,
+                        workspace.$fileExplorerRootOverride
                     )
                     .map { values in
                         let (
                             previousValues,
                             remoteDaemonStatus,
-                            activeRemoteTerminalSessionCount
+                            activeRemoteTerminalSessionCount,
+                            filesRootOverride
                         ) = values
                         let (
                             currentDirectory,
@@ -790,6 +794,7 @@ private final class SelectedWorkspaceDirectoryObserver: ObservableObject {
                             currentDirectory: workspace.isRemoteWorkspace
                                 ? workspace.presentedCurrentDirectory
                                 : currentDirectory,
+                            filesRootOverride: filesRootOverride,
                             remoteConfiguration: remoteConfiguration,
                             remoteConnectionState: remoteConnectionState,
                             remoteConnectionDetail: remoteConnectionDetail,
