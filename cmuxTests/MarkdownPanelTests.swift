@@ -561,6 +561,61 @@ final class MarkdownPanelTests: XCTestCase {
         XCTAssertFalse(coordinator.isShellLoadingForTesting)
     }
 
+    func testMarkdownRendererReentersWindowRecoversDetachedMidLoad() {
+        let coordinator = MarkdownWebRenderer.Coordinator()
+        let webView = MarkdownWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let theme = MarkdownWebTheme.resolve(backgroundColor: .windowBackgroundColor)
+        coordinator.webView = webView
+        defer { coordinator.close() }
+
+        // The surface is reparented before the shell ever finishes loading
+        // (opened and immediately moved into another pane). The shell was
+        // never healthy, but a load was genuinely in flight.
+        coordinator.loadShell(theme: theme, initialMarkdown: "# Fresh\n")
+        XCTAssertTrue(coordinator.isShellLoadingForTesting)
+        coordinator.handleViewLeftWindow()
+
+        // While detached, WebKit reclaimed the WebContent process and the
+        // in-place recovery budget was exhausted, leaving the panel blank.
+        for _ in 0...2 {
+            coordinator.webViewWebContentProcessDidTerminate(webView)
+        }
+        XCTAssertEqual(coordinator.webContentProcessRecoveryAttemptsForTesting, 2)
+        XCTAssertFalse(coordinator.isShellLoadingForTesting)
+
+        // Re-entering a window must recover the mid-load detach just like a
+        // healthy detach: reset the recovery budget and reload the shell.
+        coordinator.handleViewReenteredWindow()
+
+        XCTAssertEqual(coordinator.webContentProcessRecoveryAttemptsForTesting, 0)
+        XCTAssertTrue(coordinator.isShellLoadingForTesting)
+    }
+
+    func testMarkdownRendererDetachDuringExhaustedRecoveryDoesNotResetBudget() {
+        let coordinator = MarkdownWebRenderer.Coordinator()
+        let webView = MarkdownWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let theme = MarkdownWebTheme.resolve(backgroundColor: .windowBackgroundColor)
+        coordinator.webView = webView
+        defer { coordinator.close() }
+
+        // A crashing payload consumes its whole recovery budget while attached;
+        // the final recovery reload is still in flight (isShellLoading == true,
+        // attempts == max).
+        coordinator.loadShell(theme: theme, initialMarkdown: "# Crashy\n")
+        coordinator.webViewWebContentProcessDidTerminate(webView)
+        coordinator.webViewWebContentProcessDidTerminate(webView)
+        XCTAssertEqual(coordinator.webContentProcessRecoveryAttemptsForTesting, 2)
+        XCTAssertTrue(coordinator.isShellLoadingForTesting)
+
+        // Detaching during that last-chance reload must not count as a
+        // recoverable mid-load detach: the budget is already exhausted, so
+        // re-entry must not grant a fresh one.
+        coordinator.handleViewLeftWindow()
+        coordinator.handleViewReenteredWindow()
+
+        XCTAssertEqual(coordinator.webContentProcessRecoveryAttemptsForTesting, 2)
+    }
+
     func testMarkdownRendererContainerAdoptionSurvivesLateDismantle() {
         let coordinator = MarkdownWebRenderer.Coordinator()
         let webView = MarkdownWebView(frame: .zero, configuration: WKWebViewConfiguration())
