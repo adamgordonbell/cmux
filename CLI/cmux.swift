@@ -17292,7 +17292,15 @@ struct CMUXCLI {
         let parsed = try parseRightSidebarCLIArguments(commandArgs)
         let socketArgs = try rightSidebarSocketArguments(from: parsed)
         let windowId = try resolveRightSidebarWindowId(parsed.window ?? windowOverride, client: client)
-        let workspaceId = try resolveRightSidebarWorkspaceId(parsed.workspace, windowId: windowId, client: client)
+        // Default the target to the CALLER's workspace ($CMUX_WORKSPACE_ID) when
+        // neither --workspace nor --window is given, so set-root/show/etc. act on
+        // the workspace whose terminal issued the command — not whichever
+        // workspace happens to be focused when it runs. Without this the app falls
+        // back to selectedTabId, so switching workspaces before/after the call
+        // lands the files-root override on the wrong workspace. Mirrors `cmux
+        // open` via the shared workspaceFromArgsOrEnv contract.
+        let workspaceRaw = workspaceFromArgsOrEnv(commandArgs, windowOverride: windowOverride)
+        let workspaceId = try resolveRightSidebarWorkspaceId(workspaceRaw, windowId: windowId, client: client)
 
         var forwardedArgs = socketArgs
         if let workspaceId {
