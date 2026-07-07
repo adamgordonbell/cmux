@@ -184,7 +184,22 @@ enum WorkspaceSlots {
             target = others.first { claudeIshTitle(panelTitle($0, in: planning)) } ?? others.first
         }
 
-        if let target, processAlive(cfg.processName, onTTY: planning.surfaceTTYNames[target.id]) {
+        // Liveness-by-tty can false-negative: the tty map is stale for a beat
+        // after a surface is restored/reparented (it re-registers its tty
+        // asynchronously), so processAlive reads "dead" on a claude that's
+        // actually running. Healing then types the startup command as raw
+        // keystrokes straight into that live claude's prompt — the reported
+        // "⌘1 dumps the startup command into the running claude" bug.
+        //
+        // A claude-ish tab title (✳ idle / braille spinner / "claude code") is
+        // a renderer-driven signal that doesn't depend on the tty map, and it's
+        // the very thing we selected `target` by. Trust it: if the target looks
+        // like a running agent, focus it, never type into it. A bare restored
+        // shell has a plain title, so self-heal still fires for it.
+        let targetLooksLikeAgent = target.map { claudeIshTitle(panelTitle($0, in: planning)) } ?? false
+        if let target,
+            targetLooksLikeAgent
+            || processAlive(cfg.processName, onTTY: planning.surfaceTTYNames[target.id]) {
             focus(panelId: target.id, in: planning, tabManager: tabManager)
             return .focused(workspaceID: planning.id, surfaceID: target.id)
         }
