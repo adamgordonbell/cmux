@@ -51,6 +51,13 @@ struct HotkeyLegendPanel: View {
         }
     }
 
+    /// External (non-cmux) hotkeys worth surfacing in the same legend. These are
+    /// bound outside cmux — e.g. Hammerspoon — so they can't be rebound from
+    /// cmux Settings and are shown as static reference rows.
+    private static let externalRows: [Row] = [
+        Row(keys: "⌃⌥⌘F", label: "screenshot form-fill (screenfill)"),
+    ]
+
     /// What each modifier glyph means — Adam's keyboard doesn't print them.
     private static let modifierKey: [(String, String)] = [
         ("⌘", "cmd"),
@@ -71,6 +78,19 @@ struct HotkeyLegendPanel: View {
                         Text(row.label)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                ForEach(Self.externalRows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(row.keys)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .frame(minWidth: 64, alignment: .leading)
+                        Text(row.label)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
                 }
