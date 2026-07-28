@@ -113,16 +113,45 @@ enum WorkspaceSlots {
         tabManager.workspaceGroups.first { $0.name == banishedGroupName }
     }
 
+    /// The banished group is SEALED: its sidebar header can't be expanded,
+    /// selected, or added to. Parked workspaces go away and stay away, and
+    /// ⌘⇧U is the only way back — which is the whole point of banishing
+    /// rather than just switching away from something.
+    ///
+    /// Upstream spawns a brand-new anchor workspace for every group (see
+    /// `WorkspaceGroupCoordinator.createWorkspaceGroup`), so without this the
+    /// header row is itself a live, clickable session pretending to be a
+    /// folder. Sidebar call sites guard their header callbacks on this.
+    static func isSealedGroup(_ groupId: UUID, in tabManager: TabManager) -> Bool {
+        guard isEnabled else { return false }
+        return banishedGroup(in: tabManager)?.id == groupId
+    }
+
+    /// `isSealedGroup` for callers that hold an anchor workspace id instead of
+    /// a group id (the sidebar header's focus/tap path).
+    static func isSealedAnchor(_ anchorWorkspaceId: UUID, in tabManager: TabManager) -> Bool {
+        guard isEnabled else { return false }
+        return banishedGroup(in: tabManager)?.anchorWorkspaceId == anchorWorkspaceId
+    }
+
     /// The workspaces slots 2–9 index into: sidebar order, minus planning,
     /// minus everything parked in the banished group (members AND anchor).
+    ///
+    /// Members are only excluded while the group is COLLAPSED. An expanded
+    /// group renders its members as ordinary sidebar rows, and the whole point
+    /// of deriving slots from sidebar order is that what you see is what you
+    /// get — a visible row must stay addressable. This also keeps a corrupted
+    /// membership (see `sinkBanishedGroup`) from silently emptying the slot
+    /// list, which sends every ⌘2–9 press down the create-a-scratch branch.
+    /// The anchor is always excluded: it's a group header, not a real slot.
     static func slotWorkspaces(in tabManager: TabManager) -> [Workspace] {
         let planningId = planningWorkspace(in: tabManager)?.id
         let banished = banishedGroup(in: tabManager)
         return tabManager.tabs.filter { ws in
             if ws.id == planningId { return false }
             if let banished {
-                if ws.groupId == banished.id { return false }
                 if ws.id == banished.anchorWorkspaceId { return false }
+                if ws.groupId == banished.id, banished.isCollapsed { return false }
             }
             return true
         }
@@ -142,6 +171,7 @@ enum WorkspaceSlots {
     static func select(_ slot: Int, tabManager: TabManager) -> SelectOutcome {
         guard (0...9).contains(slot) else { return .failed("slot out of range") }
         autonameScratches(in: tabManager)
+        enforceSealedCollapse(in: tabManager)
         if slot <= 1 {
             return selectPlanningSlot(slot, tabManager: tabManager)
         }
@@ -162,6 +192,18 @@ enum WorkspaceSlots {
             initialTerminalCommand: command,
             select: true
         )
+        // New workspaces land after the current one, which may be a banished
+        // member — group contiguity then adopts the scratch and it drops
+        // straight back out of the slot list. Evict it and send it to the end,
+        // where sidebar order and slot order agree.
+        if ws.groupId != nil {
+            tabManager.removeWorkspaceFromGroup(workspaceId: ws.id)
+        }
+        _ = tabManager.reorderWorkspace(
+            tabId: ws.id,
+            toIndex: max(0, tabManager.tabs.count - 1)
+        )
+        sinkBanishedGroup(in: tabManager)
         return .createdScratch(workspaceID: ws.id)
     }
 
@@ -343,10 +385,36 @@ enum WorkspaceSlots {
         // sidebar position comes from the anchor's slot in tabs[]. Moving the
         // anchor to the end pulls the members with it via the coordinator's
         // group-contiguity normalization.
+        //
+        // That normalization runs BOTH ways: whatever ends up contiguous with
+        // the sinking anchor gets absorbed INTO the group. Since this runs on
+        // every slot press, ordinary workspaces sitting just above the anchor
+        // were silently swallowed — and because the group stays uncollapsed
+        // while empty, they kept rendering normally with no visual cue. Snapshot
+        // membership and evict anything that wasn't a member before the move.
+        let before = Set(
+            tabManager.tabs.filter { $0.groupId == group.id }.map(\.id)
+        )
         _ = tabManager.reorderWorkspace(
             tabId: group.anchorWorkspaceId,
             toIndex: max(0, tabManager.tabs.count - 1)
         )
+        for ws in tabManager.tabs
+        where ws.groupId == group.id && !before.contains(ws.id) {
+            tabManager.removeWorkspaceFromGroup(workspaceId: ws.id)
+        }
+        enforceSealedCollapse(in: tabManager)
+    }
+
+    /// Sealed groups stay shut. The header chevron is inert (see
+    /// `isSealedGroup`), so if the group is ever left expanded there is no way
+    /// for the user to close it again — re-assert on every slot press and after
+    /// every group mutation rather than trusting it to have been set once.
+    /// `unbanishAll` in particular empties the group without re-collapsing it,
+    /// and a restored session brings back whatever collapse state was persisted.
+    private static func enforceSealedCollapse(in tabManager: TabManager) {
+        guard let group = banishedGroup(in: tabManager), !group.isCollapsed else { return }
+        tabManager.setWorkspaceGroupCollapsed(groupId: group.id, isCollapsed: true)
     }
 
     // MARK: - Autoname
