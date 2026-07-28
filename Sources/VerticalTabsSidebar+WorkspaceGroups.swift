@@ -452,10 +452,13 @@ extension VerticalTabsSidebar {
 
         var actions = SidebarGroupHeaderRowActions(
             onToggleCollapsed: { [weak tabManager] in
-                tabManager?.toggleWorkspaceGroupCollapsed(groupId: groupId)
+                guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
+                tabManager.toggleWorkspaceGroupCollapsed(groupId: groupId)
             },
             onFocusAnchor: { [weak tabManager] modifiers in
                 guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
                 Self.focusWorkspaceGroupAnchor(
                     groupId: groupId,
                     modifiers: modifiers,
@@ -466,6 +469,7 @@ extension VerticalTabsSidebar {
             },
             onTapPlus: { [weak tabManager] in
                 guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
                 _ = tabManager.createWorkspaceInGroup(
                     groupId: groupId,
                     placement: resolvePlacement()
