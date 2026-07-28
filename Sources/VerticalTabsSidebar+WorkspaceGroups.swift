@@ -94,11 +94,14 @@ extension VerticalTabsSidebar {
         )
         let actions = SidebarGroupHeaderRowActions(
             onToggleCollapsed: { [weak tabManager, groupId = group.id] in
-                tabManager?.toggleWorkspaceGroupCollapsed(groupId: groupId)
+                guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
+                tabManager.toggleWorkspaceGroupCollapsed(groupId: groupId)
             },
             onFocusAnchor: { [weak tabManager, anchorId = group.anchorWorkspaceId, selectedTabIds = $selectedTabIds, lastSidebarSelectionIndex = $lastSidebarSelectionIndex] in
                 guard let tabManager else { return }
                 guard let anchorTab = tabManager.tabs.first(where: { $0.id == anchorId }) else { return }
+                guard !WorkspaceSlots.isSealedAnchor(anchorId, in: tabManager) else { return }
                 tabManager.selectWorkspace(anchorTab)
                 if selectedTabIds.wrappedValue != [anchorId] {
                     selectedTabIds.wrappedValue = [anchorId]
@@ -109,6 +112,7 @@ extension VerticalTabsSidebar {
             },
             onTapPlus: { [weak tabManager, groupId = group.id, placement = newWorkspacePlacement] in
                 guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
                 let resolved = placement
                     ?? UserDefaultsSettingsClient(defaults: .standard).value(for: SettingCatalog().workspaceGroups.newWorkspacePlacement)
                 _ = tabManager.createWorkspaceInGroup(groupId: groupId, placement: resolved)
@@ -346,11 +350,14 @@ extension VerticalTabsSidebar {
             bottomDropIndicatorVisible: snapshot.bottomDropIndicatorVisible,
             onDragStart: onDragStart,
             onToggleCollapsed: { [weak tabManager, groupId = snapshot.groupId] in
-                tabManager?.toggleWorkspaceGroupCollapsed(groupId: groupId)
+                guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
+                tabManager.toggleWorkspaceGroupCollapsed(groupId: groupId)
             },
             onFocusAnchor: { [weak tabManager, anchorId = snapshot.anchorWorkspaceId, selectedTabIds = $selectedTabIds, lastSidebarSelectionIndex = $lastSidebarSelectionIndex] in
                 guard let tabManager else { return }
                 guard let anchorTab = tabManager.tabs.first(where: { $0.id == anchorId }) else { return }
+                guard !WorkspaceSlots.isSealedAnchor(anchorId, in: tabManager) else { return }
                 tabManager.selectWorkspace(anchorTab)
                 if selectedTabIds.wrappedValue != [anchorId] {
                     selectedTabIds.wrappedValue = [anchorId]
@@ -361,6 +368,7 @@ extension VerticalTabsSidebar {
             },
             onTapPlus: { [weak tabManager, groupId = snapshot.groupId, placement = snapshot.newWorkspacePlacement] in
                 guard let tabManager else { return }
+                guard !WorkspaceSlots.isSealedGroup(groupId, in: tabManager) else { return }
                 let resolved = placement
                     ?? UserDefaultsSettingsClient(defaults: .standard).value(for: SettingCatalog().workspaceGroups.newWorkspacePlacement)
                 _ = tabManager.createWorkspaceInGroup(groupId: groupId, placement: resolved)
