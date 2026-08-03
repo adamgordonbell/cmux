@@ -16,6 +16,7 @@ BUNDLE_SET=0
 DERIVED_SET=0
 TAG=""
 LAUNCH=0
+NO_QUIT=0
 CMUX_DEBUG_LOG=""
 CMUX_DEV_PORT=""
 CMUX_DEV_PORT_END=""
@@ -265,6 +266,13 @@ Options:
                          so macOS launches the freshly-built binary on cmd-click or --launch.
   --launch               Launch the app after building. Without this flag, the script
                          builds and prints the app path but does not open it.
+  --no-quit              Do NOT terminate the running same-tag app after the build.
+                         For build-ahead-of-time flows (cmux-autoupdate) that stage a
+                         build in DerivedData while you keep working in the installed
+                         /Applications copy, and install it later at a quiet moment.
+                         Only safe because the build writes DerivedData only — see the
+                         termination block near the end for what this opts out of.
+                         Incompatible with --launch (the launched app would be the old one).
   --prod-auth            Point this tagged Debug build at production Stack auth,
                          cmux APIs, and the production Iroh broker.
   --credentials-file <path>
@@ -504,6 +512,10 @@ while [[ $# -gt 0 ]]; do
       LAUNCH=1
       shift
       ;;
+    --no-quit)
+      NO_QUIT=1
+      shift
+      ;;
     --prod-auth)
       PROD_AUTH=1
       shift
@@ -552,6 +564,13 @@ done
 if [[ -z "$TAG" ]]; then
   echo "error: --tag is required (example: ./scripts/reload.sh --tag fix-sidebar-theme)" >&2
   usage
+  exit 1
+fi
+
+# --no-quit leaves the old app running, so --launch would foreground THAT one and
+# report success while the new build sits unused. Refuse rather than mislead.
+if [[ "$NO_QUIT" -eq 1 && "$LAUNCH" -eq 1 ]]; then
+  echo "error: --no-quit cannot be combined with --launch (the old app would stay frontmost)" >&2
   exit 1
 fi
 
@@ -1077,7 +1096,13 @@ publish_reload_cli_path "$CLI_PATH"
 # even without --launch. A stale tagged app pinned to this bundle id would otherwise
 # keep running against freshly-overwritten resources, and macOS would foreground it
 # instead of launching the newly built binary when the user cmd-clicks the .app.
-if [[ -n "$TAG" ]]; then
+#
+# --no-quit opts out, for build-ahead flows where the running app is a COPY installed
+# elsewhere (/Applications) rather than this DerivedData bundle. Nothing is overwritten
+# under it, so it can keep serving the old build until the installer swaps it at a quiet
+# moment. Don't use this flag if you intend to launch the DerivedData bundle directly —
+# that's the case the termination exists for.
+if [[ -n "$TAG" && "$NO_QUIT" -eq 0 ]]; then
   /usr/bin/osascript -e "tell application id \"${BUNDLE_ID}\" to quit" >/dev/null 2>&1 || true
   sleep 0.3
   pkill -f "${APP_NAME}.app/Contents/MacOS/${BASE_APP_NAME}" || true
