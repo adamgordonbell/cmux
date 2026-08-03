@@ -18,6 +18,7 @@ DERIVED_SET=0
 TAG=""
 LAUNCH=0
 BUILD_ONLY=0
+NO_QUIT=0
 CMUX_DEBUG_LOG=""
 CMUX_DEV_PORT=""
 CMUX_DEV_PORT_END=""
@@ -904,6 +905,11 @@ Options:
   --build-only           Build and validate a tagged app without replacing or
                          stopping the running tagged app, daemon, or tag state.
                          Cannot be combined with --launch.
+  --no-quit              Fork: build and publish the tagged bundle as usual, but do NOT
+                         terminate the running same-tag app. For cmux-autoupdate, which
+                         stages a build in DerivedData while the /Applications copy keeps
+                         running and installs it later. Unlike --build-only, the built
+                         bundle is kept. Incompatible with --launch.
   --prod-auth            Point this tagged Debug build at production Stack auth,
                          cmux APIs, and the production Iroh broker.
                          Without it, tagged builds use the shared dev backend, which
@@ -1248,6 +1254,10 @@ while [[ $# -gt 0 ]]; do
       BUILD_ONLY=1
       shift
       ;;
+    --no-quit)
+      NO_QUIT=1
+      shift
+      ;;
     --prod-auth)
       PROD_AUTH=1
       shift
@@ -1353,6 +1363,13 @@ if [[ "$LAUNCH" -eq 1 && -n "$TAG" && -z "$AUTH_PROFILE" ]]; then
     echo "error: configure ~/.secrets/cmuxterm-dev.env with scripts/setup-team-dev.sh" >&2
     exit 2
   fi
+fi
+
+# --no-quit leaves the old app running, so --launch would foreground THAT one and
+# report success while the new build sits unused. Refuse rather than mislead.
+if [[ "$NO_QUIT" -eq 1 && "$LAUNCH" -eq 1 ]]; then
+  echo "error: --no-quit cannot be combined with --launch (the old app would stay frontmost)" >&2
+  exit 1
 fi
 
 if [[ -n "$AUTH_CREDENTIALS_FILE" ]]; then
@@ -2112,7 +2129,8 @@ fi
 # running process resolves SwiftPM resources through its app path; removing
 # that path first can make Bundle.module trap during startup while the old
 # process is still initializing.
-if [[ -n "$TAG" && "$BUILD_ONLY" -ne 1 ]]; then
+# Fork: --no-quit opts out (the running app is the /Applications copy, not this bundle).
+if [[ -n "$TAG" && "$BUILD_ONLY" -ne 1 && "$NO_QUIT" -eq 0 ]]; then
   /usr/bin/osascript -e "tell application id \"${BUNDLE_ID}\" to quit" >/dev/null 2>&1 || true
   sleep 0.3
   TAG_PROCESS_PATTERN="${APP_NAME}.app/Contents/MacOS/${BASE_APP_NAME}"
