@@ -58,10 +58,25 @@ if [[ ! -d "$PROJECT_DIR/ghostty" ]]; then
   exit 1
 fi
 
-if ! command -v zig >/dev/null 2>&1; then
-  echo "Error: zig is not installed." >&2
-  echo "Install via: brew install zig" >&2
+# A bare `zig` off PATH is not safe to use here: Homebrew ships a version newer
+# than Ghostty's pin and build.zig rejects it at comptime. Resolve a matching
+# one, and point it at an SDK it can actually link against.
+# shellcheck source=scripts/zig-toolchain.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zig-toolchain.sh"
+
+ZIG_BIN="$(zig_toolchain_find || true)"
+if [[ -z "$ZIG_BIN" ]]; then
+  echo "Error: no zig ${ZIG_REQUIRED} found." >&2
+  echo "Homebrew's zig may be too new; install the pinned version to" >&2
+  echo "  \$HOME/.local/share/zig-${ZIG_REQUIRED}/  (or set CMUX_ZIG)" >&2
   exit 1
+fi
+
+ZIG_SHIM_DIR=""
+if ZIG_SDK="$(zig_toolchain_sdk)"; then
+  ZIG_SHIM_DIR="$(zig_toolchain_make_shim "$ZIG_SDK")"
+  trap 'rm -rf "$ZIG_SHIM_DIR"' EXIT
+  echo "==> zig ${ZIG_REQUIRED} cannot link against the default SDK; using $ZIG_SDK"
 fi
 
 if [[ ! -f "$PROJECT_DIR/ghostty/include/ghostty.h" ]]; then
@@ -222,7 +237,8 @@ else
     echo "==> Building GhosttyKit.xcframework (this may take a few minutes)..."
     (
       cd ghostty
-      zig build -Dcrash-report-subdir="$GHOSTTYKIT_CRASH_REPORT_SUBDIR" -Demit-xcframework=true -Dxcframework-target=universal -Doptimize=ReleaseFast
+      PATH="${ZIG_SHIM_DIR:+$ZIG_SHIM_DIR:}$PATH" env -u SDKROOT \
+        "$ZIG_BIN" build -Dcrash-report-subdir="$GHOSTTYKIT_CRASH_REPORT_SUBDIR" -Demit-xcframework=true -Dxcframework-target=universal -Doptimize=ReleaseFast
     )
     echo "$GHOSTTY_KEY" > "$LOCAL_KEY_STAMP"
     echo "$GHOSTTY_SHA" > "$LEGACY_LOCAL_SHA_STAMP"
