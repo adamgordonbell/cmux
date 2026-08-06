@@ -60,6 +60,26 @@ fi
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/ghostty-zig-version.sh"
+# A bare `zig` off PATH is not safe to use here: Homebrew ships a version newer
+# than Ghostty's pin and build.zig rejects it at comptime. Resolve a matching
+# one, and point it at an SDK it can actually link against.
+# shellcheck source=scripts/zig-toolchain.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zig-toolchain.sh"
+
+ZIG_BIN="$(zig_toolchain_find || true)"
+if [[ -z "$ZIG_BIN" ]]; then
+  echo "Error: no zig ${ZIG_REQUIRED} found." >&2
+  echo "Homebrew's zig may be too new; install the pinned version to" >&2
+  echo "  \$HOME/.local/share/zig-${ZIG_REQUIRED}/  (or set CMUX_ZIG)" >&2
+  exit 1
+fi
+
+ZIG_SHIM_DIR=""
+if ZIG_SDK="$(zig_toolchain_sdk)"; then
+  ZIG_SHIM_DIR="$(zig_toolchain_make_shim "$ZIG_SDK")"
+  trap 'rm -rf "$ZIG_SHIM_DIR"' EXIT
+  echo "==> zig ${ZIG_REQUIRED} cannot link against the default SDK; using $ZIG_SDK"
+fi
 
 if [[ ! -f "$PROJECT_DIR/ghostty/include/ghostty.h" ]]; then
   echo "error: ghostty/include/ghostty.h is missing. Run ./scripts/setup.sh first." >&2
@@ -278,7 +298,8 @@ else
       # bundle, skipped by -Demit-macos-app=false). Runtime lookups are
       # comptime-gated to return the msgid, which is what cmux shipped
       # all along.
-      zig build \
+      PATH="${ZIG_SHIM_DIR:+$ZIG_SHIM_DIR:}$PATH" env -u SDKROOT \
+        "$ZIG_BIN" build \
         -Dcrash-report-subdir="$GHOSTTYKIT_CRASH_REPORT_SUBDIR" \
         -Dsentry=false \
         -Di18n=false \
