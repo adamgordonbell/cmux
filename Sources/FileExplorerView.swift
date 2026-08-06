@@ -862,6 +862,25 @@ struct FileExplorerPanelView: NSViewRepresentable {
                 menu.addItem(.separator())
             }
 
+            // Narrowing the tree without typing a path. The inverse (widening
+            // back out) lives in the header breadcrumb, not here — there is no
+            // folder to right-click once the root already sits above you.
+            if isLocal, node.isDirectory, node.path != store.rootPath {
+                let setRootItem = NSMenuItem(
+                    title: String(
+                        localized: "fileExplorer.contextMenu.setAsRoot",
+                        defaultValue: "Set as Root"
+                    ),
+                    action: #selector(contextMenuSetAsRoot(_:)),
+                    keyEquivalent: ""
+                )
+                setRootItem.target = self
+                setRootItem.representedObject = node
+                menu.addItem(setRootItem)
+
+                menu.addItem(.separator())
+            }
+
             menu.addFileExplorerInsertPathItems(target: self, representedObject: node, insertAction: #selector(contextMenuInsertPath(_:)), insertRelativeAction: #selector(contextMenuInsertRelativePath(_:)))
 
             let copyPathItem = NSMenuItem(
@@ -891,6 +910,12 @@ struct FileExplorerPanelView: NSViewRepresentable {
         @objc private func contextMenuRevealInFinder(_ sender: NSMenuItem) {
             guard let node = sender.representedObject as? FileExplorerNode else { return }
             FileExternalOpenAction.revealInFinder(fileURL: URL(fileURLWithPath: node.path))
+        }
+
+        @MainActor
+        @objc private func contextMenuSetAsRoot(_ sender: NSMenuItem) {
+            guard let node = sender.representedObject as? FileExplorerNode else { return }
+            FileExplorerRootPinning.setRoot(node.path, workspaceId: store.workspaceRootIdentity)
         }
 
         @objc private func contextMenuCopyPath(_ sender: NSMenuItem) {
@@ -1265,8 +1290,11 @@ final class FileExplorerContainerView: NSView {
         currentRootPath = nextRootPath; currentSearchScope = nextSearchScope
         currentResourceContextID = store.resourceContextID
         currentWorkspaceRootIdentity = nextWorkspaceRootIdentity; currentContentRevision = nextContentRevision
-        headerView.update(displayPath: store.displayRootPath,
+        headerView.update(displayPath: store.displayRootPath, rootPath: store.rootPath,
             retry: store.provider is CloudVMFileExplorerProvider ? { [weak store] in store?.retryRemoteRoot() } : nil)
+        headerView.onSelectRoot = { [weak store] path in
+            FileExplorerRootPinning.setRoot(path, workspaceId: store?.workspaceRootIdentity)
+        }
         if workspaceRootChanged { cancelPendingSearchRefresh(); pendingSearchRefreshAfterSettled = false; searchController.cancel(clear: true); searchField.stringValue = ""; applySearchSnapshot(.empty) }
         if searchScopeChanged {
             pendingSearchRefreshAfterSettled = false
