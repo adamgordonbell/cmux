@@ -83,6 +83,11 @@ select_zig_for_target() {
   path_zig="$(command -v zig 2>/dev/null || true)"
   [[ -n "$path_zig" ]] && candidates+=("$path_zig")
   candidates+=("/usr/local/bin/zig")
+  # A version-pinned local install, for when the package manager has moved past
+  # ZIG_REQUIRED (Homebrew shipped 0.16.0 while Ghostty still pins 0.15.2, which
+  # left no working zig on PATH at all). Version-checked like every other
+  # candidate, so a stale directory here is ignored rather than trusted.
+  candidates+=("$HOME/.local/share/zig-${ZIG_REQUIRED}/zig")
 
   local fallback=""
   local host_match=""
@@ -268,13 +273,80 @@ build_helper() {
   fi
 
   echo "Building Ghostty CLI helper with $zig_bin${target:+ for $target}"
+
+  # Zig 0.15.2 cannot link against the macOS 26 SDK at all — not even a
+  # hello-world: libSystem never resolves, so every libc symbol comes back
+  # undefined (`_abort`, `_bzero`, `__availability_version_check`, …). The
+  # failure hits the build runner itself, before any of this script's flags
+  # reach the build, which is why neither `--sysroot` nor SDKROOT fixes it:
+  # `--sysroot` is applied to the user's build only, and this Zig ignores
+  # SDKROOT for sysroot selection despite the note below.
+  #
+  # Zig locates the SDK by shelling out to `xcrun --show-sdk-path`, so pointing
+  # that probe at an older SDK is the one intervention that lands early enough.
+  # Everything else passes through to the real xcrun untouched.
+  local shim_dir=""
+  local zig_sdk
+  if zig_sdk="$(select_legacy_zig_sdk)"; then
+    shim_dir="$(mktemp -d "${TMPDIR:-/tmp}/cmux-zig-xcrun-shim.XXXXXX")"
+    cat > "$shim_dir/xcrun" <<SHIM
+#!/bin/bash
+# Managed by scripts/build-ghostty-cli-helper.sh — see the note at the call site.
+for arg in "\$@"; do
+  case "\$arg" in
+    --show-sdk-path) echo "$zig_sdk"; exit 0 ;;
+    --show-sdk-version) echo "$(basename "$zig_sdk" .sdk | sed 's/^MacOSX//')"; exit 0 ;;
+  esac
+done
+exec /usr/bin/xcrun "\$@"
+SHIM
+    chmod +x "$shim_dir/xcrun"
+    echo "  (zig ${ZIG_REQUIRED} cannot link against the default SDK; using $zig_sdk)"
+  fi
+
   (
     cd "$GHOSTTY_DIR"
     # Zig 0.15.x treats SDKROOT as a sysroot override. Xcode exports SDKROOT to
     # the macOS SDK, which makes Zig look for SDK paths under that SDK again and
     # leaves build-runner binaries unlinked against libSystem on a cold cache.
-    env -u SDKROOT "${args[@]}"
+    if [[ -n "$shim_dir" ]]; then
+      PATH="$shim_dir:$PATH" env -u SDKROOT "${args[@]}"
+    else
+      env -u SDKROOT "${args[@]}"
+    fi
   )
+  local status=$?
+  [[ -n "$shim_dir" ]] && rm -rf "$shim_dir"
+  return $status
+}
+
+# The newest SDK this Zig can actually link against, printed only when the
+# default SDK is too new to use directly. `CMUX_ZIG_SDKROOT` forces a choice.
+select_legacy_zig_sdk() {
+  if [[ -n "${CMUX_ZIG_SDKROOT:-}" ]]; then
+    echo "$CMUX_ZIG_SDKROOT"
+    return 0
+  fi
+
+  local default_major
+  default_major="$(/usr/bin/xcrun --show-sdk-version 2>/dev/null | cut -d. -f1)"
+  # An SDK older than 26 is what this Zig expects; leave it alone.
+  if [[ -n "$default_major" && "$default_major" -lt 26 ]]; then
+    return 1
+  fi
+
+  local candidate
+  while IFS= read -r candidate; do
+    [[ -d "$candidate" ]] || continue
+    echo "$candidate"
+    return 0
+  done < <(
+    ls -d \
+      /Library/Developer/CommandLineTools/SDKs/MacOSX15*.sdk \
+      /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15*.sdk \
+      2>/dev/null | sort -rV
+  )
+  return 1
 }
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmux-ghostty-helper.XXXXXX")"
