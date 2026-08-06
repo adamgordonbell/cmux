@@ -239,3 +239,58 @@ private func existsIn(_ existingPaths: Set<String>) -> @Sendable (String) -> Boo
         )
     }
 }
+
+@Suite struct TerminalRepositoryRootResolutionTests {
+    /// Agent output spells paths from the repository root while the shell can
+    /// be anywhere inside it, so the cwd join alone misses.
+    @Test func resolvesRepoRelativePathFromNestedCwd() {
+        let resolver = TerminalPathResolver(fileExists: existsIn([
+            "/repo/.git",
+            "/repo/projects/notion-interview/prep.md",
+        ]))
+        #expect(
+            resolver.resolveQuicklookPath(
+                "projects/notion-interview/prep.md",
+                cwd: "/repo/scripts/nested"
+            ) == "/repo/projects/notion-interview/prep.md"
+        )
+    }
+
+    @Test func prefersCwdMatchOverRepositoryRootMatch() {
+        let resolver = TerminalPathResolver(fileExists: existsIn([
+            "/repo/.git",
+            "/repo/docs/notes.md",
+            "/repo/scripts/docs/notes.md",
+        ]))
+        #expect(
+            resolver.resolveQuicklookPath("docs/notes.md", cwd: "/repo/scripts")
+                == "/repo/scripts/docs/notes.md"
+        )
+    }
+
+    @Test func stopsAtNearestRepositoryRoot() {
+        // An inner repo must not have its lookups answered by the outer one.
+        let resolver = TerminalPathResolver(fileExists: existsIn([
+            "/outer/.git",
+            "/outer/inner/.git",
+            "/outer/shared/file.md",
+        ]))
+        #expect(
+            resolver.resolveQuicklookPath("shared/file.md", cwd: "/outer/inner/deep") == nil
+        )
+    }
+
+    @Test func returnsNilOutsideAnyRepository() {
+        let resolver = TerminalPathResolver(fileExists: existsIn([
+            "/elsewhere/projects/prep.md",
+        ]))
+        #expect(
+            resolver.resolveQuicklookPath("projects/prep.md", cwd: "/tmp/scratch") == nil
+        )
+    }
+
+    @Test func absolutePathsStillResolveWithoutCwd() {
+        let resolver = TerminalPathResolver(fileExists: existsIn(["/tmp/notes.md"]))
+        #expect(resolver.resolveQuicklookPath("/tmp/notes.md", cwd: nil) == "/tmp/notes.md")
+    }
+}
