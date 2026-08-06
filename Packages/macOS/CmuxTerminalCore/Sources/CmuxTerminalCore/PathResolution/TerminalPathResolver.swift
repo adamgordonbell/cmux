@@ -42,27 +42,68 @@ public struct TerminalPathResolver: Sendable {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
+        let tokens = trimmed.pathResolutionCandidates()
         var seenPaths: Set<String> = []
-        for token in trimmed.pathResolutionCandidates() {
-            let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !normalizedToken.isEmpty else { continue }
 
-            let expandedToken = (normalizedToken as NSString).expandingTildeInPath
-            let candidatePath: String
-            if expandedToken.hasPrefix("/") {
-                candidatePath = expandedToken
-            } else {
-                guard let cwd, !cwd.isEmpty else { continue }
-                candidatePath = (cwd as NSString).appendingPathComponent(expandedToken)
-            }
+        // Bases are tried in order and the cwd goes first, so a token that
+        // resolves against the surface's own directory always wins.
+        for base in resolutionBases(cwd: cwd) {
+            for token in tokens {
+                let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalizedToken.isEmpty else { continue }
 
-            let standardizedPath = (candidatePath as NSString).standardizingPath
-            guard seenPaths.insert(standardizedPath).inserted else { continue }
-            if fileExists(standardizedPath) {
-                return standardizedPath
+                let expandedToken = (normalizedToken as NSString).expandingTildeInPath
+                let candidatePath: String
+                if expandedToken.hasPrefix("/") {
+                    candidatePath = expandedToken
+                } else {
+                    guard let base, !base.isEmpty else { continue }
+                    candidatePath = (base as NSString).appendingPathComponent(expandedToken)
+                }
+
+                let standardizedPath = (candidatePath as NSString).standardizingPath
+                guard seenPaths.insert(standardizedPath).inserted else { continue }
+                if fileExists(standardizedPath) {
+                    return standardizedPath
+                }
             }
         }
 
+        return nil
+    }
+
+    /// Directories a relative candidate is resolved against, most specific first.
+    ///
+    /// The surface cwd alone is not enough for terminal text that spells paths
+    /// from a repository root — the common case for agent output, which quotes
+    /// `projects/foo/notes.md` while the shell sits several directories deep.
+    /// Ghostty only links tokens containing a slash, so these are recognisably
+    /// paths; they just need a second base to be found under.
+    private func resolutionBases(cwd: String?) -> [String?] {
+        guard let cwd, !cwd.isEmpty else { return [nil] }
+        var bases: [String?] = [cwd]
+        if let repositoryRoot = repositoryRoot(containing: cwd), repositoryRoot != cwd {
+            bases.append(repositoryRoot)
+        }
+        return bases
+    }
+
+    /// Nearest ancestor of `directory` holding a `.git` entry, if any.
+    ///
+    /// Probed through the injected `fileExists` rather than by shelling out to
+    /// git, so this stays testable and adds no subprocess to a click.
+    private func repositoryRoot(containing directory: String) -> String? {
+        var current = (directory as NSString).standardizingPath
+        guard current.hasPrefix("/") else { return nil }
+
+        while current != "/" && !current.isEmpty {
+            if fileExists((current as NSString).appendingPathComponent(".git")) {
+                return current
+            }
+            let parent = (current as NSString).deletingLastPathComponent
+            guard parent != current else { break }
+            current = parent
+        }
         return nil
     }
 
