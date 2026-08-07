@@ -65,7 +65,12 @@ struct TerminalLinkOpenCoordinator {
             return false
         }
 
-        let trimmed = request.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Fork: a host-less `file://` target is a path that merely arrived wearing
+        // a scheme (how agent output hyperlinks its paths). Unwrap it so it takes
+        // the same route as bare path text — into cmux's viewers — instead of
+        // upstream's explicit-file-URL route to the system opener.
+        let rawTrimmed = request.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = TerminalPathResolver.localFilePath(fromFileURL: rawTrimmed) ?? rawTrimmed
         let container = containerResolver(request.sourceWorkspaceId, request.sourcePanelId)
         if !request.isLocalExport, let sourcePanelId = request.sourcePanelId, let container,
            container.terminalLinkIsRemoteTerminal(sourcePanelId),

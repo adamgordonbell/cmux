@@ -119,6 +119,26 @@ public struct TerminalPathResolver: Sendable {
         return URL(string: trimmed)?.scheme == nil
     }
 
+    /// The local file-system path a `file://` URL names, if it names one.
+    ///
+    /// Agents (Claude Code among them) emit paths as OSC 8 hyperlinks with an
+    /// absolute `file://` target, so the text the user clicks looks like a
+    /// relative path but arrives here already resolved and scheme-bearing. Every
+    /// other resolution entry point rejects schemes — correctly, since `https://`
+    /// is not a path — which sent these straight to the system opener and out to
+    /// whatever app owns the extension, instead of cmux's own viewer.
+    ///
+    /// Only host-less (or explicitly local) URLs qualify: `file://someserver/x`
+    /// names a remote resource, not a path on this machine.
+    public static func localFilePath(fromFileURL rawText: String) -> String? {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.isFileURL else { return nil }
+        let host = url.host ?? ""
+        guard host.isEmpty || host == "localhost" else { return nil }
+        let path = url.path
+        return path.isEmpty ? nil : path
+    }
+
     /// Outcome of resolving a token that no base could account for.
     public enum SearchResolution: Equatable, Sendable {
         case none
