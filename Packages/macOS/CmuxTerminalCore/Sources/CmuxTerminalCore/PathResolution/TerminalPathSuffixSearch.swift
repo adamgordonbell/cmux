@@ -8,7 +8,7 @@ import Foundation
 ///
 /// ## Why ignore-awareness decides the strategy
 ///
-/// Measured on a real tree (`~/para`, 2026-08-06): 3,982 files once
+/// Measured on a real repo tree (2026-08-06): 3,982 files once
 /// `.gitignore` is honored, 431,644 when it is not — 8.5s versus 10ms for the
 /// same traversal. The gap is not `.git` or `node_modules`; it is one ignored
 /// project directory holding 258,340 files, whose name no hand-written prune

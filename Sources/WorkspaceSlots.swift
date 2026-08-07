@@ -6,8 +6,9 @@ import Foundation
 /// Numbered workspace "slots" — fixed hotkey targets with self-healing roles.
 ///
 /// Slot semantics (ported from the external cmux-slot overlay, see the fork
-/// plan): slot 0 = the jot pad (first tab of the planning workspace), slot 1 =
-/// the planning Claude session, slots 2–9 = the visible non-planning
+/// plan): slot 0 = a pinned tab of the planning workspace (matched by the
+/// configured title), slot 1 = the planning agent session, slots 2–9 = the
+/// visible non-planning
 /// workspaces in sidebar order. Slots 0/1 self-heal: if the role's process is
 /// not actually running on the surface's tty, the configured command is
 /// relaunched in place (the surface is created first if it was closed).
@@ -24,9 +25,9 @@ import Foundation
 /// {
 ///   "enabled": true,
 ///   "planningName": "planning",
-///   "slot0": { "titleContains": "jot pad", "command": "~/para/scripts/jot/jot", "pinFirst": true },
-///   "slot1": { "command": "cd ~/para/periodic && claude" },
-///   "scratch": { "command": "cc-pick", "cwd": "~/para" },
+///   "slot0": { "titleContains": "notes", "command": "~/bin/notes", "pinFirst": true },
+///   "slot1": { "command": "cd ~/work && claude" },
+///   "scratch": { "command": "claude", "cwd": "~/src" },
 ///   "processName": "claude"
 /// }
 /// ```
@@ -38,7 +39,9 @@ enum WorkspaceSlots {
 
     struct SlotRole: Codable {
         var titleContains: String?
-        var command: String
+        // Optional: with no command there is nothing to heal *to*, so an
+        // unconfigured slot focuses and stops rather than guessing.
+        var command: String?
         var pinFirst: Bool?
     }
 
@@ -183,9 +186,11 @@ enum WorkspaceSlots {
             return .focused(workspaceID: ws.id, surfaceID: nil)
         }
         // Beyond the end: spin up a fresh scratch workspace.
+        // No personal defaults in source: an unconfigured scratch opens $HOME with
+        // a plain shell. Set "scratch" in slots.json for anything else.
         let cfg = settings().scratch
-        let cwd = expandPath(cfg?.cwd ?? "~/para")
-        let command = cfg?.command ?? "cc-pick"
+        let cwd = expandPath(cfg?.cwd ?? "~")
+        let command = cfg?.command
         let ws = tabManager.addWorkspace(
             title: "scratch \(scratch.count + 1)",
             workingDirectory: cwd,
@@ -212,12 +217,19 @@ enum WorkspaceSlots {
         tabManager.selectTab(planning)
 
         let cfg = settings()
+        // Unconfigured slots focus the planning workspace but never self-heal —
+        // there's no sensible command to guess, and guessing wrong would type
+        // into a live session. Real commands come from slots.json.
         let role: SlotRole = (slot == 0)
-            ? (cfg.slot0 ?? SlotRole(titleContains: "jot pad", command: "~/para/scripts/jot/jot", pinFirst: true))
-            : (cfg.slot1 ?? SlotRole(titleContains: nil, command: "cd ~/para/periodic && claude", pinFirst: false))
+            ? (cfg.slot0 ?? SlotRole(titleContains: nil, command: nil, pinFirst: true))
+            : (cfg.slot1 ?? SlotRole(titleContains: nil, command: nil, pinFirst: false))
 
         let terminals = terminalPanels(in: planning)
-        let jot = terminals.first { panelTitle($0, in: planning).lowercased().contains("jot pad") }
+        // Which tab slot 0 owns is named by config, not baked in here.
+        let pinnedMatch = cfg.slot0?.titleContains?.lowercased()
+        let jot = pinnedMatch.flatMap { needle in
+            terminals.first { panelTitle($0, in: planning).lowercased().contains(needle) }
+        }
         let target: TerminalPanel?
         if slot == 0 {
             target = jot
@@ -247,8 +259,16 @@ enum WorkspaceSlots {
         }
 
         // Heal: reuse the dead shell if the surface exists, else create one in
-        // the leftmost pane.
-        let command = expandPath(role.command)
+        // the leftmost pane. With no configured command there is nothing to
+        // heal to — focus what's there and stop.
+        guard let roleCommand = role.command, !roleCommand.isEmpty else {
+            if let target {
+                focus(panelId: target.id, in: planning, tabManager: tabManager)
+                return .focused(workspaceID: planning.id, surfaceID: target.id)
+            }
+            return .focused(workspaceID: planning.id, surfaceID: nil)
+        }
+        let command = expandPath(roleCommand)
         let healedPanelId: UUID?
         if let target {
             let tty = planning.surfaceTTYNames[target.id]
