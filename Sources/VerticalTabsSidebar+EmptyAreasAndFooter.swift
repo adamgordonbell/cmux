@@ -54,14 +54,39 @@ struct SidebarDevFooter: View {
         VStack(alignment: .leading, spacing: 6) {
             SidebarFooterButtons(updateViewModel: updateViewModel, fileExplorerState: fileExplorerState, modifierKeyMonitor: modifierKeyMonitor, onSendFeedback: onSendFeedback)
             if showSidebarDevBuildBanner {
-                Text(String(localized: "debug.devBuildBanner.title", defaultValue: "THIS IS A DEV BUILD"))
+                // The commit rides along with the banner so "did the
+                // auto-update land?" is answerable by looking, rather than by
+                // going to a terminal. cmux-autoupdate's countdown dialog names
+                // the commit it is about to install, so the two can be compared
+                // directly after an unattended restart.
+                Text(Self.devBuildBannerText)
                     .cmuxFont(size: 11, weight: .semibold)
                     .foregroundColor(.red)
+                    .textSelection(.enabled)
             }
         }
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .padding(.bottom, 6)
+    }
+
+    /// Banner text, suffixed with the build's commit when one was stamped in.
+    ///
+    /// Same source as the About window: `CMUXCommit` is baked into Info.plist at
+    /// build time, with the `CMUX_COMMIT` environment variable covering runs
+    /// launched straight out of a build directory.
+    static var devBuildBannerText: String {
+        let base = String(localized: "debug.devBuildBanner.title", defaultValue: "THIS IS A DEV BUILD")
+        guard let commit = buildCommit else { return base }
+        return "\(base) · \(commit)"
+    }
+
+    private static var buildCommit: String? {
+        if let value = Bundle.main.infoDictionary?["CMUXCommit"] as? String, !value.isEmpty {
+            return value
+        }
+        let env = ProcessInfo.processInfo.environment["CMUX_COMMIT"] ?? ""
+        return env.isEmpty ? nil : env
     }
 }
 #endif
