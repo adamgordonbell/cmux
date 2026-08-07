@@ -3024,8 +3024,17 @@ class GhosttyApp {
                         workspace: workspace,
                         surfaceId: termSurface.id
                     )
-                    guard let resolvedPath = TerminalPathResolver().resolveOpenURLFilePath(trimmedUrlString, cwd: cwd) else {
-                        return (false, nil)
+                    guard let resolvedPath = surfaceView.resolveOpenURLPathWithSearch(
+                        trimmedUrlString,
+                        cwd: cwd,
+                        workspace: workspace,
+                        surfaceId: termSurface.id
+                    ) else {
+                        // A schemeless, slash-bearing token that no base and no
+                        // search could account for is a path that does not
+                        // exist — handing it to the URL route just opens a
+                        // browser on nonsense. Swallow the click instead.
+                        return (TerminalPathResolver.looksLikeRelativePath(trimmedUrlString), nil)
                     }
                     guard CommandClickFileOpenRouter.shouldRouteInCmux(path: resolvedPath) else {
                         return (false, resolvedPath)
@@ -6701,6 +6710,96 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
             )
         }
 #endif
+    }
+
+    /// Resolves a clicked token to a path, searching by suffix when no base
+    /// accounts for it and asking when the search is ambiguous.
+    ///
+    /// Terminal text routinely spells a path relative to something the terminal
+    /// cannot know — a project directory the author had in mind. Exact bases
+    /// still win outright, so this only costs a subprocess on clicks that would
+    /// otherwise have failed. Ambiguity is put to the user rather than guessed.
+    @MainActor
+    func resolveOpenURLPathWithSearch(
+        _ rawText: String,
+        cwd: String?,
+        workspace: Workspace,
+        surfaceId: UUID
+    ) -> String? {
+        let resolver = TerminalPathResolver()
+        if let exact = resolver.resolveOpenURLFilePath(rawText, cwd: cwd) {
+            return exact
+        }
+        guard TerminalPathResolver.looksLikeRelativePath(rawText) else { return nil }
+
+        // The pinned files-sidebar root is a strong hint: it usually sits on
+        // whatever the current work is, which is the directory such paths tend
+        // to be written against.
+        var searchRoots: [String] = []
+        if let pinned = workspace.fileExplorerRootOverride?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !pinned.isEmpty {
+            searchRoots.append(pinned)
+        }
+
+        switch resolver.resolveWithSearch(rawText, cwd: cwd, searchRoots: searchRoots) {
+        case .none:
+            return nil
+        case .single(let path):
+            return path
+        case .ambiguous(let paths):
+            presentPathDisambiguationMenu(paths, workspace: workspace, surfaceId: surfaceId)
+            return nil
+        }
+    }
+
+    @MainActor
+    private func presentPathDisambiguationMenu(
+        _ paths: [String],
+        workspace: Workspace,
+        surfaceId: UUID
+    ) {
+        let menu = NSMenu()
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        for path in paths {
+            let title = path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+            let item = NSMenuItem(
+                title: String(title),
+                action: #selector(openDisambiguatedPath(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = DisambiguatedPathChoice(
+                path: path,
+                workspaceId: workspace.id,
+                surfaceId: surfaceId
+            )
+            menu.addItem(item)
+        }
+        let point = preferredPointerPoint(from: NSPoint(x: 0, y: bounds.height)) ?? .zero
+        menu.popUp(positioning: nil, at: point, in: self)
+    }
+
+    private struct DisambiguatedPathChoice {
+        let path: String
+        let workspaceId: UUID
+        let surfaceId: UUID
+    }
+
+    @MainActor
+    @objc private func openDisambiguatedPath(_ sender: NSMenuItem) {
+        guard let choice = sender.representedObject as? DisambiguatedPathChoice,
+              let workspace = terminalSurface?.owningWorkspace(),
+              workspace.id == choice.workspaceId
+        else { return }
+        let fileURL = URL(fileURLWithPath: choice.path)
+        CommandClickFileOpenRouter.deferredOpenFileInCmux(
+            workspace: workspace,
+            preferredWorkspaceId: workspace.id,
+            surfaceId: choice.surfaceId,
+            filePath: choice.path
+        ) {
+            NSWorkspace.shared.open(fileURL)
+        }
     }
 
     private func resolvedWordPathWorkingDirectory(

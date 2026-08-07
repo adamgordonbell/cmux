@@ -16,15 +16,23 @@ public import Foundation
 /// ``TerminalLinkRouter``'s injected `BrowserHostNormalizing` seam.
 public struct TerminalPathResolver: Sendable {
     private let fileExists: @Sendable (String) -> Bool
+    private let searchSuffix: @Sendable (String, String) -> [String]
 
     /// Creates a resolver that probes candidate paths through `fileExists`.
     ///
-    /// - Parameter fileExists: The file-existence capability; defaults to the
-    ///   real file system.
+    /// - Parameters:
+    ///   - fileExists: The file-existence capability; defaults to the real
+    ///     file system.
+    ///   - searchSuffix: Finds files under a root whose path ends with a given
+    ///     suffix, for ``resolveWithSearch(_:cwd:searchRoots:)``. Defaults to
+    ///     ``TerminalPathSuffixSearch/live``; tests inject a fake so no
+    ///     subprocess runs.
     public init(
-        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        searchSuffix: @escaping @Sendable (String, String) -> [String] = TerminalPathSuffixSearch.live
     ) {
         self.fileExists = fileExists
+        self.searchSuffix = searchSuffix
     }
 
     /// Resolves raw terminal text to an existing file path for QuickLook.
@@ -81,11 +89,100 @@ public struct TerminalPathResolver: Sendable {
     /// paths; they just need a second base to be found under.
     private func resolutionBases(cwd: String?) -> [String?] {
         guard let cwd, !cwd.isEmpty else { return [nil] }
-        var bases: [String?] = [cwd]
-        if let repositoryRoot = repositoryRoot(containing: cwd), repositoryRoot != cwd {
-            bases.append(repositoryRoot)
+
+        // Walk cwd -> repository root, so a path spelled from an intermediate
+        // directory (a project dir inside a larger repo, say) is found without
+        // needing to know which level it was written against.
+        let stopAt = repositoryRoot(containing: cwd)
+        var bases: [String?] = []
+        var current = (cwd as NSString).standardizingPath
+        while true {
+            bases.append(current)
+            if current == stopAt || current == "/" || current.isEmpty { break }
+            let parent = (current as NSString).deletingLastPathComponent
+            if parent == current { break }
+            current = parent
+            if stopAt == nil { break }
         }
         return bases
+    }
+
+    /// Whether text is a schemeless, slash-bearing token — the shape Ghostty
+    /// links as a relative path.
+    ///
+    /// Callers use this to tell "a path that does not exist" apart from "not a
+    /// path at all", so a failed resolution can be swallowed rather than handed
+    /// to a URL opener that would act on nonsense.
+    public static func looksLikeRelativePath(_ rawText: String) -> Bool {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.contains("/"), !trimmed.hasPrefix("/") else { return false }
+        return URL(string: trimmed)?.scheme == nil
+    }
+
+    /// Outcome of resolving a token that no base could account for.
+    public enum SearchResolution: Equatable, Sendable {
+        case none
+        case single(String)
+        /// More than one file ends with the token; the caller disambiguates.
+        case ambiguous([String])
+    }
+
+    /// Resolves a token by searching for files whose path *ends* with it.
+    ///
+    /// Exact bases are tried first and win outright. The search only runs when
+    /// they all miss, because terminal text routinely spells a path relative to
+    /// something the terminal has no knowledge of — a project directory the
+    /// author had in mind, for instance. Matching on the path suffix finds the
+    /// file by identity rather than guessing which directory was meant.
+    ///
+    /// Suffix matching, not fuzzy matching: the token is already a path
+    /// fragment, so anchoring it is both cheaper and far more precise than
+    /// scoring. Ambiguity is reported rather than guessed at.
+    public func resolveWithSearch(
+        _ rawText: String,
+        cwd: String?,
+        searchRoots: [String] = []
+    ) -> SearchResolution {
+        if let exact = resolveQuicklookPath(rawText, cwd: cwd) {
+            return .single(exact)
+        }
+
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .none }
+
+        // Only path-shaped tokens are worth searching for. A bare word would
+        // match far too much, and Ghostty never links one anyway.
+        guard trimmed.contains("/"), !trimmed.hasPrefix("/") else { return .none }
+
+        var roots = searchRoots
+        if let cwd, !cwd.isEmpty {
+            roots.append(repositoryRoot(containing: cwd) ?? cwd)
+        }
+
+        var matches: [String] = []
+        var seen: Set<String> = []
+        for root in roots where !root.isEmpty {
+            for match in searchSuffix(root, trimmed) {
+                let standardized = (match as NSString).standardizingPath
+                guard seen.insert(standardized).inserted else { continue }
+                matches.append(standardized)
+            }
+        }
+
+        switch matches.count {
+        case 0: return .none
+        case 1: return .single(matches[0])
+        default:
+            // Shallowest first: the least-nested match is the likeliest intent
+            // and leads a disambiguation menu sensibly.
+            return .ambiguous(
+                matches.sorted {
+                    let lhs = $0.components(separatedBy: "/").count
+                    let rhs = $1.components(separatedBy: "/").count
+                    return lhs == rhs ? $0 < $1 : lhs < rhs
+                }
+            )
+        }
     }
 
     /// Nearest ancestor of `directory` holding a `.git` entry, if any.

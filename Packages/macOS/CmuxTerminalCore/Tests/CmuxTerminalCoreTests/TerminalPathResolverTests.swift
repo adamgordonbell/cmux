@@ -293,4 +293,106 @@ private func existsIn(_ existingPaths: Set<String>) -> @Sendable (String) -> Boo
         let resolver = TerminalPathResolver(fileExists: existsIn(["/tmp/notes.md"]))
         #expect(resolver.resolveQuicklookPath("/tmp/notes.md", cwd: nil) == "/tmp/notes.md")
     }
+
+    /// A path spelled against an intermediate directory — neither the cwd nor
+    /// the repository root — still resolves via the ancestor walk.
+    @Test func resolvesAgainstIntermediateAncestor() {
+        let resolver = TerminalPathResolver(fileExists: existsIn([
+            "/repo/.git",
+            "/repo/projects/alpha/spike/PROMPT.md",
+        ]))
+        #expect(
+            resolver.resolveQuicklookPath("spike/PROMPT.md", cwd: "/repo/projects/alpha/deep/deeper")
+                == "/repo/projects/alpha/spike/PROMPT.md"
+        )
+    }
+}
+
+/// Records whether the search capability was invoked, from inside a `@Sendable`
+/// closure.
+private final class CallFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fired = false
+
+    func mark() {
+        lock.lock(); defer { lock.unlock() }
+        fired = true
+    }
+
+    var wasCalled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return fired
+    }
+}
+
+@Suite struct TerminalPathSearchResolutionTests {
+    private func resolver(
+        existing: Set<String> = [],
+        matches: [String] = []
+    ) -> TerminalPathResolver {
+        TerminalPathResolver(
+            fileExists: existsIn(existing),
+            searchSuffix: { _, _ in matches }
+        )
+    }
+
+    @Test func exactMatchWinsAndSkipsSearchEntirely() {
+        let flag = CallFlag()
+        let resolver = TerminalPathResolver(
+            fileExists: existsIn(["/repo/.git", "/repo/docs/notes.md"]),
+            searchSuffix: { _, _ in flag.mark(); return ["/elsewhere/docs/notes.md"] }
+        )
+        #expect(resolver.resolveWithSearch("docs/notes.md", cwd: "/repo") == .single("/repo/docs/notes.md"))
+        #expect(flag.wasCalled == false)
+    }
+
+    /// The reported case: a path spelled relative to a project directory the
+    /// terminal knows nothing about.
+    @Test func findsProjectRelativePathBySuffix() {
+        let resolved = resolver(
+            existing: ["/repo/.git"],
+            matches: ["/repo/projects/sprint/spike/brief/narrator/PROMPT.md"]
+        ).resolveWithSearch("spike/brief/narrator/PROMPT.md", cwd: "/repo")
+        #expect(resolved == .single("/repo/projects/sprint/spike/brief/narrator/PROMPT.md"))
+    }
+
+    @Test func reportsAmbiguityShallowestFirst() {
+        let resolved = resolver(
+            existing: ["/repo/.git"],
+            matches: ["/repo/a/b/c/docs/notes.md", "/repo/x/docs/notes.md"]
+        ).resolveWithSearch("docs/notes.md", cwd: "/repo")
+        #expect(resolved == .ambiguous(["/repo/x/docs/notes.md", "/repo/a/b/c/docs/notes.md"]))
+    }
+
+    @Test func bareWordIsNeverSearched() {
+        let flag = CallFlag()
+        let resolver = TerminalPathResolver(
+            fileExists: { _ in false },
+            searchSuffix: { _, _ in flag.mark(); return [] }
+        )
+        #expect(resolver.resolveWithSearch("PROMPT", cwd: "/repo") == .none)
+        #expect(flag.wasCalled == false)
+    }
+
+    @Test func absoluteTokenIsNeverSearched() {
+        let flag = CallFlag()
+        let resolver = TerminalPathResolver(
+            fileExists: { _ in false },
+            searchSuffix: { _, _ in flag.mark(); return [] }
+        )
+        #expect(resolver.resolveWithSearch("/gone/missing.md", cwd: "/repo") == .none)
+        #expect(flag.wasCalled == false)
+    }
+
+    @Test func reportsNoneWhenSearchFindsNothing() {
+        #expect(resolver(existing: ["/repo/.git"]).resolveWithSearch("a/b.md", cwd: "/repo") == .none)
+    }
+
+    @Test func deduplicatesMatchesAcrossRoots() {
+        let resolved = resolver(
+            existing: ["/repo/.git"],
+            matches: ["/repo/docs/notes.md"]
+        ).resolveWithSearch("docs/notes.md", cwd: "/repo", searchRoots: ["/other"])
+        #expect(resolved == .single("/repo/docs/notes.md"))
+    }
 }
