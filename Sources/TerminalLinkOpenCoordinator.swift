@@ -83,12 +83,33 @@ struct TerminalLinkOpenCoordinator {
         } else {
             canResolveLocalFilePath = false
         }
-        if !trimmed.isEmpty,
-           canResolveLocalFilePath, !request.isRemoteInitiated,
-           let reference = TerminalPathResolver().resolveOpenURLFileReference(
-               trimmed,
-               cwd: resolvedWorkingDirectory(request: request, container: container)
-           ) {
+        var resolvedReference: TerminalFileReference?
+        if !trimmed.isEmpty, canResolveLocalFilePath, !request.isRemoteInitiated {
+            let cwd = resolvedWorkingDirectory(request: request, container: container)
+            resolvedReference = TerminalPathResolver().resolveOpenURLFileReference(trimmed, cwd: cwd)
+            if resolvedReference == nil {
+                // Fork: no base accounts for the token — search for it by suffix.
+                switch TerminalLinkPathSearch.resolve(
+                    trimmed,
+                    cwd: cwd,
+                    request: request,
+                    container: container,
+                    openChoice: { path in
+                        _ = routeLocalFile(
+                            URL(fileURLWithPath: path),
+                            request: request,
+                            container: container,
+                            unavailableReason: "file route unavailable"
+                        )
+                    }
+                ) {
+                case .none: break
+                case .path(let path): resolvedReference = TerminalFileReference(path: path)
+                case .handled: return true
+                }
+            }
+        }
+        if let reference = resolvedReference {
             if let line = reference.line, !isExplicitLocalFileURL {
                 log(
                     "link.openURL resolvedAsFileLocation=\(reference.path):\(line)" +
