@@ -6726,11 +6726,16 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         workspace: Workspace,
         surfaceId: UUID
     ) -> String? {
+        // A `file://` target is a path that merely arrived wearing a scheme —
+        // that is how agent output hyperlinks its paths. Unwrap it first so it
+        // takes the same route as bare path text.
+        let text = TerminalPathResolver.localFilePath(fromFileURL: rawText) ?? rawText
+
         let resolver = TerminalPathResolver()
-        if let exact = resolver.resolveOpenURLFilePath(rawText, cwd: cwd) {
+        if let exact = resolver.resolveOpenURLFilePath(text, cwd: cwd) {
             return exact
         }
-        guard TerminalPathResolver.looksLikeRelativePath(rawText) else { return nil }
+        guard TerminalPathResolver.looksLikeRelativePath(text) else { return nil }
 
         // The pinned files-sidebar root is a strong hint: it usually sits on
         // whatever the current work is, which is the directory such paths tend
@@ -6741,7 +6746,7 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
             searchRoots.append(pinned)
         }
 
-        switch resolver.resolveWithSearch(rawText, cwd: cwd, searchRoots: searchRoots) {
+        switch resolver.resolveWithSearch(text, cwd: cwd, searchRoots: searchRoots) {
         case .none:
             return nil
         case .single(let path):

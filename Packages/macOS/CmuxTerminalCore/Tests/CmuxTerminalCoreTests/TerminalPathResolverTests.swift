@@ -191,6 +191,31 @@ private func existsIn(_ existingPaths: Set<String>) -> @Sendable (String) -> Boo
     }
 }
 
+@Suite struct TerminalFileURLUnwrappingTests {
+    @Test func unwrapsHostlessFileURLToPath() {
+        #expect(
+            TerminalPathResolver.localFilePath(fromFileURL: "file:///Users/dev/project/notes.md")
+                == "/Users/dev/project/notes.md"
+        )
+        #expect(
+            TerminalPathResolver.localFilePath(fromFileURL: "file://localhost/tmp/a.md") == "/tmp/a.md"
+        )
+    }
+
+    @Test func percentEscapesAreDecoded() {
+        #expect(
+            TerminalPathResolver.localFilePath(fromFileURL: "file:///tmp/my%20notes.md")
+                == "/tmp/my notes.md"
+        )
+    }
+
+    @Test func rejectsRemoteHostsAndOtherSchemes() {
+        #expect(TerminalPathResolver.localFilePath(fromFileURL: "file://fileserver/share/a.md") == nil)
+        #expect(TerminalPathResolver.localFilePath(fromFileURL: "https://example.com/a.md") == nil)
+        #expect(TerminalPathResolver.localFilePath(fromFileURL: "docs/a.md") == nil)
+    }
+}
+
 @Suite struct TerminalVisibleLineResolutionTests {
     @Test func visibleLinesKeepsTrailingRowsOnly() {
         let text = "one\ntwo\nthree\nfour"
