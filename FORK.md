@@ -53,7 +53,7 @@ CLI surface, so an external previewer stops guessing:
 Upstream has ⌘1–9 for tabs. I wanted them for *workspaces*, addressed the way the sidebar
 shows them.
 
-- **⌘0 / ⌘1** resolve `planning` by name — a jot pad and a planning Claude. Both
+- **⌘0 / ⌘1** resolve `planning` by name — two slots on the planning workspace. Both
   **self-heal**: if nothing live is on the surface's tty, relaunch in place rather than
   typing into whatever is there.
 - **⌘2–9** = the Nth workspace **in sidebar display order**, so what you see is what you

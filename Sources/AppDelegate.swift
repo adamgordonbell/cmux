@@ -15175,7 +15175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// The generic matcher's digit guard only knows the 1–9 number-row
-    /// keycodes, so an action bound to "0" (slot 0 = jot) falls through it.
+    /// keycodes, so an action bound to "0" (slot 0) falls through it.
     /// Match the 0 key directly, but only while the action is actually bound
     /// to "0" so rebinding in Settings still wins.
     private func slotJotZeroKeyMatch(event: NSEvent) -> Bool {

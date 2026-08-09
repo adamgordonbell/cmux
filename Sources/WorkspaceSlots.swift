@@ -227,14 +227,14 @@ enum WorkspaceSlots {
         let terminals = terminalPanels(in: planning)
         // Which tab slot 0 owns is named by config, not baked in here.
         let pinnedMatch = cfg.slot0?.titleContains?.lowercased()
-        let jot = pinnedMatch.flatMap { needle in
+        let pinned = pinnedMatch.flatMap { needle in
             terminals.first { panelTitle($0, in: planning).lowercased().contains(needle) }
         }
         let target: TerminalPanel?
         if slot == 0 {
-            target = jot
+            target = pinned
         } else {
-            let others = terminals.filter { $0 !== jot }
+            let others = terminals.filter { $0 !== pinned }
             target = others.first { claudeIshTitle(panelTitle($0, in: planning)) } ?? others.first
         }
 
@@ -546,7 +546,7 @@ enum WorkspaceSlots {
         }
     }
 
-    /// When the planning workspace is split, new jot/Claude tabs go in the
+    /// When the planning workspace is split, new Claude tabs go in the
     /// LEFTMOST pane (smallest x in the layout snapshot).
     private static func leftmostPane(in ws: Workspace) -> PaneID {
         let paneIds = ws.bonsplitController.allPaneIds

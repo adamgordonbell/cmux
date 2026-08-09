@@ -254,7 +254,7 @@ enum KeyboardShortcutSettings {
             case .focusHistoryForward: return String(localized: "shortcut.focusHistoryForward.label", defaultValue: "Focus Forward")
             case .selectWorkspaceByNumber: return String(localized: "shortcut.selectWorkspaceByNumber.label", defaultValue: "Select Workspace 1…9")
             case .slotSelect: return String(localized: "shortcut.slotSelect.label", defaultValue: "Workspace Slot 1…9")
-            case .slotSelectJot: return String(localized: "shortcut.slotSelectJot.label", defaultValue: "Workspace Slot 0 (Jot Pad)")
+            case .slotSelectJot: return String(localized: "shortcut.slotSelectJot.label", defaultValue: "Workspace Slot 0 (Planning)")
             case .nukeWorkspace: return String(localized: "shortcut.nukeWorkspace.label", defaultValue: "Nuke Focused Workspace")
             case .banishWorkspace: return String(localized: "shortcut.banishWorkspace.label", defaultValue: "Banish Focused Workspace")
             case .unbanishAllWorkspaces: return String(localized: "shortcut.unbanishAllWorkspaces.label", defaultValue: "Unbanish All Workspaces")

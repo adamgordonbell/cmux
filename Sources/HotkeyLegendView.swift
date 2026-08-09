@@ -36,7 +36,7 @@ struct HotkeyLegendPanel: View {
 
     private var rows: [Row] {
         let actions: [(KeyboardShortcutSettings.Action, String)] = [
-            (.slotSelectJot, "jot pad"),
+            (.slotSelectJot, "slot 0 · planning"),
             (.slotSelect, "slots · 1 plan · 2–9 scratch"),
             (.nukeWorkspace, "nuke workspace"),
             (.banishWorkspace, "banish"),
