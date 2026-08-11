@@ -26,6 +26,10 @@ typealias Tab = Workspace
 
 private let tabManagerLogger = Logger(subsystem: "com.cmuxterm.app", category: "TabManager")
 
+/// Shares the "Slots" category with WorkspaceSlots so one log predicate shows
+/// the slot decision and the close that follows it in a single stream.
+nonisolated let slotsCloseDiagnosticLogger = Logger(subsystem: "com.cmuxterm.app", category: "Slots")
+
 enum WorkspaceOrderChangeNotificationKey {
     static let movedWorkspaceIds = "movedWorkspaceIds"
 }
@@ -2003,6 +2007,19 @@ class TabManager: ObservableObject {
 
     func closeWorkspace(_ workspace: Workspace, recordHistory: Bool = true) {
         guard tabs.count > 1 else { return }
+        // Slot-created scratch workspaces are being torn down a few hundred ms
+        // after creation with no user action (see WorkspaceSlots.select). The
+        // socket event stream shows the teardown but not the caller, so name it
+        // here: the frames above this one are the actual trigger.
+        slotsCloseDiagnosticLogger.info(
+            """
+            closeWorkspace title=\(workspace.title, privacy: .public) \
+            workspace=\(workspace.id.uuidString, privacy: .public) \
+            groupId=\(workspace.groupId?.uuidString ?? "<none>", privacy: .public) \
+            recordHistory=\(recordHistory, privacy: .public) tabs=\(self.tabs.count, privacy: .public)
+            callers=\(Thread.callStackSymbols.dropFirst().prefix(12).joined(separator: " <- "), privacy: .public)
+            """
+        )
         panelTitleUpdateCoalescer.flushNow()
         sentryBreadcrumb("workspace.close", data: ["tabCount": tabs.count - 1])
         // Closing a mirrored remote tmux workspace DETACHES from the remote session,
