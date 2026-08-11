@@ -2,6 +2,16 @@ import AppKit
 import Bonsplit
 import CmuxWorkspaces
 import Foundation
+import os
+
+/// Slot activity log. The create-a-scratch branch has a live bug — the new
+/// workspace is torn down a few hundred ms after creation — and the only
+/// instrument available was the socket event stream, which shows the teardown
+/// but not which slot decision led there. Read with:
+///
+///     log stream --predicate 'subsystem == "com.cmuxterm.app" && category == "Slots"'
+///     log show --last 15m --predicate 'subsystem == "com.cmuxterm.app" && category == "Slots"'
+nonisolated private let slotsLogger = Logger(subsystem: "com.cmuxterm.app", category: "Slots")
 
 /// Numbered workspace "slots" — fixed hotkey targets with self-healing roles.
 ///
@@ -176,13 +186,22 @@ enum WorkspaceSlots {
         autonameScratches(in: tabManager)
         enforceSealedCollapse(in: tabManager)
         if slot <= 1 {
+            slotsLogger.info("select slot=\(slot, privacy: .public) -> planning branch")
             return selectPlanningSlot(slot, tabManager: tabManager)
         }
         let scratch = slotWorkspaces(in: tabManager)
         let position = slot - 2
+        slotsLogger.info(
+            """
+            select slot=\(slot, privacy: .public) position=\(position, privacy: .public) \
+            addressable=\(scratch.count, privacy: .public) tabs=\(tabManager.tabs.count, privacy: .public) \
+            titles=\(scratch.map(\.title).joined(separator: "|"), privacy: .public)
+            """
+        )
         if position < scratch.count {
             let ws = scratch[position]
             tabManager.selectTab(ws)
+            slotsLogger.info("focused existing workspace=\(ws.id.uuidString, privacy: .public)")
             return .focused(workspaceID: ws.id, surfaceID: nil)
         }
         // Beyond the end: spin up a fresh scratch workspace.
@@ -191,17 +210,28 @@ enum WorkspaceSlots {
         let cfg = settings().scratch
         let cwd = expandPath(cfg?.cwd ?? "~")
         let command = cfg?.command
+        slotsLogger.info(
+            "creating scratch cwd=\(cwd, privacy: .public) command=\(command ?? "<none>", privacy: .public)"
+        )
         let ws = tabManager.addWorkspace(
             title: "scratch \(scratch.count + 1)",
             workingDirectory: cwd,
             initialTerminalCommand: command,
             select: true
         )
+        slotsLogger.info(
+            """
+            created scratch workspace=\(ws.id.uuidString, privacy: .public) \
+            groupId=\(ws.groupId?.uuidString ?? "<none>", privacy: .public) \
+            tabs=\(tabManager.tabs.count, privacy: .public)
+            """
+        )
         // New workspaces land after the current one, which may be a banished
         // member — group contiguity then adopts the scratch and it drops
         // straight back out of the slot list. Evict it and send it to the end,
         // where sidebar order and slot order agree.
         if ws.groupId != nil {
+            slotsLogger.info("evicting scratch from adopted group")
             tabManager.removeWorkspaceFromGroup(workspaceId: ws.id)
         }
         _ = tabManager.reorderWorkspace(
@@ -209,6 +239,37 @@ enum WorkspaceSlots {
             toIndex: max(0, tabManager.tabs.count - 1)
         )
         sinkBanishedGroup(in: tabManager)
+        let alive = tabManager.tabs.contains { $0.id == ws.id }
+        slotsLogger.info(
+            """
+            scratch settled workspace=\(ws.id.uuidString, privacy: .public) \
+            aliveAtReturn=\(alive, privacy: .public) \
+            groupId=\(ws.groupId?.uuidString ?? "<none>", privacy: .public) \
+            tabs=\(tabManager.tabs.count, privacy: .public)
+            """
+        )
+        // The teardown happens AFTER this function returns, so a synchronous
+        // check cannot see it. Re-check on later runloop turns to bracket when
+        // the workspace disappears and what its group membership was by then.
+        for delay in [0.1, 0.3, 0.6, 1.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak ws] in
+                guard let ws else {
+                    slotsLogger.error("scratch +\(delay, privacy: .public)s: workspace DEALLOCATED")
+                    return
+                }
+                let stillThere = tabManager.tabs.contains { $0.id == ws.id }
+                slotsLogger.info(
+                    """
+                    scratch +\(delay, privacy: .public)s \
+                    workspace=\(ws.id.uuidString, privacy: .public) \
+                    inTabs=\(stillThere, privacy: .public) \
+                    groupId=\(ws.groupId?.uuidString ?? "<none>", privacy: .public) \
+                    selected=\(tabManager.selectedTab?.id == ws.id, privacy: .public) \
+                    tabs=\(tabManager.tabs.count, privacy: .public)
+                    """
+                )
+            }
+        }
         return .createdScratch(workspaceID: ws.id)
     }
 
