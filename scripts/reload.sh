@@ -10,6 +10,41 @@ source "$SCRIPT_DIR/lib/dev-secrets.sh"
 
 APP_NAME="cmux DEV"
 BUNDLE_ID="com.cmuxterm.app.debug"
+
+# Are we running INSIDE the app this build is about to quit? Walk our own ancestors
+# and read each one's bundle id off disk. Matching by bundle id rather than by path
+# matters twice over: the installed /Applications copy has a different path from the
+# DerivedData bundle this build produces (so a path match would miss it), and
+# building tag B from inside tag A's app is legitimate and must not be blocked.
+running_inside_target_app() {
+  local pid=$$ exe app_dir bid
+  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+    exe="$(ps -o comm= -p "$pid" 2>/dev/null || true)"
+    if [[ "$exe" == */Contents/MacOS/* ]]; then
+      app_dir="${exe%/Contents/MacOS/*}"
+      bid="$(/usr/bin/defaults read "$app_dir/Contents/Info" CFBundleIdentifier 2>/dev/null || true)"
+      [[ "$bid" == "$BUNDLE_ID" ]] && return 0
+    fi
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+  return 1
+}
+
+# Quitting the app we live inside kills this script mid-run: the build finishes, then
+# install/relaunch never happen and the shell dies with SIGKILL (137). Not
+# hypothetical -- it is the recurring failure `cmux-dev-update` exists to prevent by
+# detaching first. Refuse rather than reproduce it.
+refuse_self_quit() {
+  echo "error: this shell is running inside the '${BUNDLE_ID}' app that this build would quit." >&2
+  echo "       Quitting it SIGKILLs this script before it can install or relaunch." >&2
+  echo >&2
+  echo "  Use the wrapper -- it detaches first, then builds, installs and relaunches:" >&2
+  echo "      cmux-dev-update" >&2
+  echo >&2
+  echo "  Only checking that the code compiles? Leave the running app alone:" >&2
+  echo "      ./scripts/reload.sh --tag ${TAG} --no-quit" >&2
+  exit 1
+}
 BASE_APP_NAME="cmux DEV"
 DERIVED_DATA=""
 NAME_SET=0
@@ -19,6 +54,7 @@ TAG=""
 LAUNCH=0
 BUILD_ONLY=0
 NO_QUIT=0
+ALLOW_SELF_QUIT=0
 CMUX_DEBUG_LOG=""
 CMUX_DEV_PORT=""
 CMUX_DEV_PORT_END=""
@@ -910,6 +946,10 @@ Options:
                          stages a build in DerivedData while the /Applications copy keeps
                          running and installs it later. Unlike --build-only, the built
                          bundle is kept. Incompatible with --launch.
+  --allow-self-quit      Fork: permit quitting the app this shell is running inside.
+                         Refused by default, because that quit SIGKILLs this script
+                         before it can install or relaunch. Only cmux-dev-update should
+                         pass it: it has already detached from the app.
   --prod-auth            Point this tagged Debug build at production Stack auth,
                          cmux APIs, and the production Iroh broker.
                          Without it, tagged builds use the shared dev backend, which
@@ -1258,6 +1298,10 @@ while [[ $# -gt 0 ]]; do
       NO_QUIT=1
       shift
       ;;
+    --allow-self-quit)
+      ALLOW_SELF_QUIT=1
+      shift
+      ;;
     --prod-auth)
       PROD_AUTH=1
       shift
@@ -1417,6 +1461,11 @@ if [[ -n "$TAG" ]]; then
   if [[ "$BUILD_ONLY" -ne 1 ]]; then
     cleanup_stale_cli_pointer_target || true
     cleanup_stale_tag_state "$TAG_SLUG" || true
+  fi
+  # Fork: fail fast, before spending minutes building something we are then
+  # going to refuse to install (see running_inside_target_app).
+  if [[ "$BUILD_ONLY" -ne 1 && "$NO_QUIT" -eq 0 && "$ALLOW_SELF_QUIT" -eq 0 ]] && running_inside_target_app; then
+    refuse_self_quit
   fi
 fi
 
@@ -2131,6 +2180,11 @@ fi
 # process is still initializing.
 # Fork: --no-quit opts out (the running app is the /Applications copy, not this bundle).
 if [[ -n "$TAG" && "$BUILD_ONLY" -ne 1 && "$NO_QUIT" -eq 0 ]]; then
+  # Fork: re-checked at the point of no return — a same-tag app can be
+  # launched while the build runs.
+  if [[ "$ALLOW_SELF_QUIT" -eq 0 ]] && running_inside_target_app; then
+    refuse_self_quit
+  fi
   /usr/bin/osascript -e "tell application id \"${BUNDLE_ID}\" to quit" >/dev/null 2>&1 || true
   sleep 0.3
   TAG_PROCESS_PATTERN="${APP_NAME}.app/Contents/MacOS/${BASE_APP_NAME}"

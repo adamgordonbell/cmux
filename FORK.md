@@ -101,6 +101,12 @@ the terminal has never heard of. Clicks silently fell through to `NSWorkspace.op
   and the GhosttyKit build in two different places. One version-checked search, used by
   both.
 - **`reload.sh --no-quit`** — build a new version while still working in the running app.
+- **`reload.sh` refuses to quit the app it is running inside** — the fork's tag is a
+  daily driver, not a throwaway build, so the upstream "quit after build" step would
+  SIGKILL its own caller. Detected by walking the caller's process ancestors and
+  matching bundle ids, so building a *different* tag from inside the daily driver is
+  still allowed. `cmux-dev-update` passes `--allow-self-quit` because it has already
+  detached by the time it builds.
 - **Build commit in the dev-build banner** — after an unattended auto-update, know which
   build you're on without asking a terminal.
 

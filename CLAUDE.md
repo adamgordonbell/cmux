@@ -29,6 +29,28 @@ Read the matching skill before changing an area, then only the references needed
 - App-linked code (`Sources/`, `CLI/`, `TunnelExtension/` and their packages) must
   remain [Swift 6.0 compatible](skills/cmux-architecture/references/swift-6-0-compatibility.md).
 
+## Building (fork) — read this before `reload.sh`
+
+**On this machine the default is working on the daily driver.** Tag `agb` is the app
+Adam is living in right now, installed at `/Applications/cmux DEV.app`. Assume that
+is the case unless you were explicitly told otherwise.
+
+That makes `reload.sh --tag agb` the wrong command: it quits the running app when the
+build finishes, which SIGKILLs your own shell along with it — build done, install and
+relaunch never run, session gone. `reload.sh` refuses this up front now and points
+here, but do not rely on the guard; reach for the right command first.
+
+| You want to | Run |
+|---|---|
+| Ship a change to the daily driver | `cmux-dev-update` |
+| Ship it without interrupting Adam | just commit — `cmux-autoupdate` deploys after 120s idle |
+| Only check that it compiles | `./scripts/reload.sh --tag agb --no-quit` |
+| Check autoupdate/deploy state | `cmux-autoupdate --status` |
+
+`cmux-dev-update` is the wrapper that makes a rebuild survivable: it detaches from the
+app before anything else, then builds, installs atomically, relaunches, and verifies
+the installed bundle is the commit it meant to install.
+
 ## Area instructions
 
 Read these before working in their scope; nested files may not load automatically:
