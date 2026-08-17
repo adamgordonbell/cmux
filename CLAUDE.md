@@ -63,6 +63,31 @@ CMUX_TAG=<tag> scripts/cmux-debug-cli.sh send --workspace workspace:1 --surface 
 
 The helper refuses to run without `CMUX_TAG`, targets `/tmp/cmux-debug-<tag>.sock`, and uses the matching tagged CLI from `~/Library/Developer/Xcode/DerivedData/cmux-<tag>/...`. It also scrubs ambient cmux terminal context (`CMUX_SOCKET`, `CMUX_SOCKET_PASSWORD`, workspace/surface/tab/panel IDs, cmuxd socket, and debug log), then sets `CMUX_SOCKET_PATH`, `CMUX_BUNDLE_ID`, and `CMUX_BUNDLED_CLI_PATH` for the selected tag.
 
+## Building (fork) — read this before `reload.sh`
+
+**On this machine the default is working on the daily driver.** Tag `agb` is the app
+Adam is living in right now, installed at `/Applications/cmux DEV.app`. Assume that
+is the case unless you were explicitly told otherwise.
+
+That makes `reload.sh --tag agb` the wrong command: it quits the running app when the
+build finishes, which SIGKILLs your own shell along with it — build done, install and
+relaunch never run, session gone. `reload.sh` refuses this up front now and points
+here, but do not rely on the guard; reach for the right command first.
+
+| You want to | Run |
+|---|---|
+| Ship a change to the daily driver | `cmux-dev-update` |
+| Ship it without interrupting Adam | just commit — `cmux-autoupdate` deploys after 120s idle |
+| Only check that it compiles | `./scripts/reload.sh --tag agb --no-quit` |
+| Check autoupdate/deploy state | `cmux-autoupdate --status` |
+
+`cmux-dev-update` is the wrapper that makes a rebuild survivable: it detaches from the
+app before anything else, then builds, installs atomically, relaunches, and verifies
+the installed bundle is the commit it meant to install.
+
+The rest of this section is upstream guidance for **throwaway tagged builds you are not
+living inside**. It does not describe the common case here.
+
 After making code changes, always use `reload.sh --tag` to build. **Never run bare `xcodebuild` or `open` an untagged `cmux DEV.app`.** Untagged builds share the default debug socket and bundle ID with other agents, causing conflicts and stealing focus.
 
 ```bash

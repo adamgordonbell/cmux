@@ -9,6 +9,41 @@ source "$SCRIPT_DIR/lib/dev-secrets.sh"
 
 APP_NAME="cmux DEV"
 BUNDLE_ID="com.cmuxterm.app.debug"
+
+# Are we running INSIDE the app this build is about to quit? Walk our own ancestors
+# and read each one's bundle id off disk. Matching by bundle id rather than by path
+# matters twice over: the installed /Applications copy has a different path from the
+# DerivedData bundle this build produces (so a path match would miss it), and
+# building tag B from inside tag A's app is legitimate and must not be blocked.
+running_inside_target_app() {
+  local pid=$$ exe app_dir bid
+  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+    exe="$(ps -o comm= -p "$pid" 2>/dev/null || true)"
+    if [[ "$exe" == */Contents/MacOS/* ]]; then
+      app_dir="${exe%/Contents/MacOS/*}"
+      bid="$(/usr/bin/defaults read "$app_dir/Contents/Info" CFBundleIdentifier 2>/dev/null || true)"
+      [[ "$bid" == "$BUNDLE_ID" ]] && return 0
+    fi
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+  return 1
+}
+
+# Quitting the app we live inside kills this script mid-run: the build finishes, then
+# install/relaunch never happen and the shell dies with SIGKILL (137). Not
+# hypothetical -- it is the recurring failure `cmux-dev-update` exists to prevent by
+# detaching first. Refuse rather than reproduce it.
+refuse_self_quit() {
+  echo "error: this shell is running inside the '${BUNDLE_ID}' app that this build would quit." >&2
+  echo "       Quitting it SIGKILLs this script before it can install or relaunch." >&2
+  echo >&2
+  echo "  Use the wrapper -- it detaches first, then builds, installs and relaunches:" >&2
+  echo "      cmux-dev-update" >&2
+  echo >&2
+  echo "  Only checking that the code compiles? Leave the running app alone:" >&2
+  echo "      ./scripts/reload.sh --tag ${TAG} --no-quit" >&2
+  exit 1
+}
 BASE_APP_NAME="cmux DEV"
 DERIVED_DATA=""
 NAME_SET=0
@@ -17,6 +52,7 @@ DERIVED_SET=0
 TAG=""
 LAUNCH=0
 NO_QUIT=0
+ALLOW_SELF_QUIT=0
 CMUX_DEBUG_LOG=""
 CMUX_DEV_PORT=""
 CMUX_DEV_PORT_END=""
@@ -272,6 +308,10 @@ Options:
                          /Applications copy, and install it later at a quiet moment.
                          Only safe because the build writes DerivedData only — see the
                          termination block near the end for what this opts out of.
+  --allow-self-quit      Permit quitting the app this shell is running inside. Refused by
+                         default, because that quit SIGKILLs this script before it can
+                         install or relaunch. Only cmux-dev-update should pass it: it has
+                         already detached from the app, so it survives the quit.
                          Incompatible with --launch (the launched app would be the old one).
   --prod-auth            Point this tagged Debug build at production Stack auth,
                          cmux APIs, and the production Iroh broker.
@@ -516,6 +556,10 @@ while [[ $# -gt 0 ]]; do
       NO_QUIT=1
       shift
       ;;
+    --allow-self-quit)
+      ALLOW_SELF_QUIT=1
+      shift
+      ;;
     --prod-auth)
       PROD_AUTH=1
       shift
@@ -593,6 +637,13 @@ if [[ -n "$TAG" ]]; then
   fi
   if [[ "$DERIVED_SET" -eq 0 ]]; then
     DERIVED_DATA="$(tagged_derived_data_path "$TAG_SLUG")"
+  fi
+
+  # Fail fast, before spending a couple of minutes building something we are then
+  # going to refuse to install. See running_inside_target_app / the termination
+  # block near the end of this script for why this is refused at all.
+  if [[ "$NO_QUIT" -eq 0 && "$ALLOW_SELF_QUIT" -eq 0 ]] && running_inside_target_app; then
+    refuse_self_quit
   fi
 fi
 
@@ -1103,6 +1154,11 @@ publish_reload_cli_path "$CLI_PATH"
 # moment. Don't use this flag if you intend to launch the DerivedData bundle directly —
 # that's the case the termination exists for.
 if [[ -n "$TAG" && "$NO_QUIT" -eq 0 ]]; then
+  # Re-checked here as well as pre-build: a same-tag app can be launched while the
+  # build runs, and this is the point of no return.
+  if [[ "$ALLOW_SELF_QUIT" -eq 0 ]] && running_inside_target_app; then
+    refuse_self_quit
+  fi
   /usr/bin/osascript -e "tell application id \"${BUNDLE_ID}\" to quit" >/dev/null 2>&1 || true
   sleep 0.3
   pkill -f "${APP_NAME}.app/Contents/MacOS/${BASE_APP_NAME}" || true
