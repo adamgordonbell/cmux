@@ -106,6 +106,30 @@ final class FileExplorerHeaderView: NSView {
             }
         }
 
+        // Recents come after the ancestors because ancestors are the "widen from
+        // here" move — same subtree, one click. Recents are the lateral jump.
+        let recents = FileExplorerRecentRoots.list(excluding: rootPath)
+        if !recents.isEmpty {
+            menu.addItem(.separator())
+            let header = NSMenuItem(
+                title: String(localized: "fileExplorer.header.recent", defaultValue: "Recent"),
+                action: nil,
+                keyEquivalent: ""
+            )
+            header.isEnabled = false
+            menu.addItem(header)
+            for recent in recents {
+                let item = NSMenuItem(
+                    title: abbreviate(recent),
+                    action: #selector(selectAncestor(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = recent
+                menu.addItem(item)
+            }
+        }
+
         menu.addItem(.separator())
         let autoItem = NSMenuItem(
             title: String(

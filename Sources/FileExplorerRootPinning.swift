@@ -49,3 +49,42 @@ enum FileExplorerRootPinning {
         return result
     }
 }
+
+/// The last few directories the files sidebar was pinned to, newest first.
+///
+/// Deliberately app-global rather than per-workspace: the point is hopping to a
+/// reference folder somewhere else in the tree — notes, another project — from
+/// whatever workspace happens to be in front. A per-workspace list would be empty
+/// in exactly the workspace where you want it.
+///
+/// Persisted in `UserDefaults` so the list survives a restart, and re-filtered on
+/// read so a folder that has since been deleted or renamed never shows up.
+enum FileExplorerRecentRoots {
+    static let limit = 5
+    private static let defaultsKey = "fileExplorer.recentRoots"
+
+    static func record(_ path: String, defaults: UserDefaults = .standard) {
+        let standardized = (path as NSString).standardizingPath
+        guard standardized.hasPrefix("/") else { return }
+        var entries = stored(defaults: defaults)
+        entries.removeAll { $0 == standardized }
+        entries.insert(standardized, at: 0)
+        defaults.set(Array(entries.prefix(limit)), forKey: defaultsKey)
+    }
+
+    /// Recents that still exist as directories, excluding `current` — offering the
+    /// root you are already on is a dead menu entry.
+    static func list(excluding current: String? = nil, defaults: UserDefaults = .standard) -> [String] {
+        let currentStandardized = current.map { ($0 as NSString).standardizingPath }
+        return stored(defaults: defaults).filter { path in
+            guard path != currentStandardized else { return false }
+            var isDirectory: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            return exists && isDirectory.boolValue
+        }
+    }
+
+    private static func stored(defaults: UserDefaults) -> [String] {
+        (defaults.array(forKey: defaultsKey) as? [String]) ?? []
+    }
+}
