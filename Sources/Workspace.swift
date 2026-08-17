@@ -2741,7 +2741,15 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
     }
     // CLI-set override for the files sidebar root (`right-sidebar set-root`).
     // In-memory only — not persisted; nil means follow currentDirectory.
-    @Published var fileExplorerRootOverride: String?
+    @Published var fileExplorerRootOverride: String? {
+        didSet {
+            // Every writer lands here — the header menu, `right-sidebar set-root`,
+            // and the auto-pin hook — so this is the one place that sees all of
+            // them and can keep the global recents list honest.
+            guard let fileExplorerRootOverride, fileExplorerRootOverride != oldValue else { return }
+            FileExplorerRecentRoots.record(fileExplorerRootOverride)
+        }
+    }
     @Published private(set) var extensionSidebarProjectRootPath: String?
     private var extensionSidebarProjectRootRefreshID: UInt64 = 0
     @Published private(set) var surfaceTabBarDirectory: String?
@@ -4357,6 +4365,9 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
         configureForkAgentConversationContextMenuAvailability()
         bonsplitController.tabContextForkConversationDefaultActionProvider = { _, _ in
             AgentConversationForkDefaultSettings.current().tabContextAction
+        }
+        bonsplitController.tabContextSidebarRootProvider = { [weak self] tabId, _ in
+            self?.sidebarRootDirectory(forSurfaceId: tabId)
         }
         bonsplitController.onTabCloseRequest = { [weak self] tabId, _, source in
             switch source {
@@ -15125,6 +15136,30 @@ extension Workspace: BonsplitDelegate {
         executeSurfaceTabBarCommandButton(identifier: identifier, inPane: pane)
     }
 
+    /// Folder a tab offers as a files-sidebar root, or `nil` when it has no file
+    /// behind it. Only the file-backed surfaces qualify: a preview tab knows exactly
+    /// which document you are looking at, whereas a terminal already drives the
+    /// sidebar through cwd auto-follow and a browser has no path at all.
+    func sidebarRootDirectory(forSurfaceId surfaceId: TabID) -> String? {
+        guard !isRemoteWorkspace,
+              let panelId = panelIdFromSurfaceId(surfaceId) else { return nil }
+        let filePath: String
+        if let markdown = markdownPanel(for: panelId) {
+            filePath = markdown.filePath
+        } else if let preview = filePreviewPanel(for: panelId) {
+            filePath = preview.filePath
+        } else {
+            return nil
+        }
+        let directory = (filePath as NSString).deletingLastPathComponent
+        var isDirectory: ObjCBool = false
+        guard !directory.isEmpty,
+              FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else { return nil }
+        return directory
+    }
+
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Bonsplit.Tab, inPane pane: PaneID) {
         switch action {
         case .rename:
@@ -15199,6 +15234,12 @@ extension Workspace: BonsplitDelegate {
             // current remote session while retaining its configuration for a
             // later reconnect.
             disconnectRemoteConnection(clearConfiguration: false)
+        case .setSidebarRootHere:
+            guard let directory = sidebarRootDirectory(forSurfaceId: tab.id) else {
+                NSSound.beep()
+                return
+            }
+            FileExplorerRootPinning.setRoot(directory, workspaceId: id)
         case .forkConversation,
              .forkConversationRight,
              .forkConversationLeft,
