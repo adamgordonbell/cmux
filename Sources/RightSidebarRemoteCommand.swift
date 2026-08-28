@@ -24,6 +24,8 @@ enum RightSidebarRemoteCommand: Equatable, Sendable {
     case setMode(RightSidebarMode, focus: Bool)
     // nil clears the override back to following the shell cwd.
     case setFilesRoot(String?)
+    // Opens the tool as a pane surface. `paneId` nil means the focused pane.
+    case openPane(RightSidebarMode, paneId: UUID?, focus: Bool)
     case getState
 }
 
@@ -41,9 +43,18 @@ struct RightSidebarRemoteState: Equatable, Sendable {
     let modeRawValue: String
 }
 
+/// Identifies a surface the app just created, in the app's own UUID terms; the
+/// socket layer is what turns these into `surface:`/`pane:` handle refs.
+struct RightSidebarRemoteSurface: Equatable, Sendable {
+    let workspaceId: UUID
+    let paneId: UUID?
+    let surfaceId: UUID
+}
+
 enum RightSidebarRemoteApplyResult: Equatable, Sendable {
     case ok
     case state(RightSidebarRemoteState)
+    case surface(RightSidebarRemoteSurface)
     case failure(String)
 }
 
@@ -52,6 +63,7 @@ extension RightSidebarRemoteRequest {
         var positional: [String] = []
         var target = RightSidebarRemoteTarget()
         var noFocus = false
+        var paneId: UUID?
         var index = 0
 
         while index < tokens.count {
@@ -59,6 +71,24 @@ extension RightSidebarRemoteRequest {
             if token == "--no-focus" {
                 noFocus = true
                 index += 1
+                continue
+            }
+            if token == "--pane" || token.hasPrefix("--pane=") {
+                let rawValue: String
+                if token == "--pane" {
+                    guard index + 1 < tokens.count else {
+                        return .failure(.init(message: String(localized: "rightSidebar.remote.error.optionRequiresID", defaultValue: "ERROR: \(token) requires an id")))
+                    }
+                    rawValue = tokens[index + 1]
+                    index += 2
+                } else {
+                    rawValue = String(token.dropFirst("--pane=".count))
+                    index += 1
+                }
+                guard let uuid = UUID(uuidString: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                    return .failure(.init(message: String(localized: "rightSidebar.remote.error.invalidPaneID", defaultValue: "ERROR: Invalid right sidebar --pane id '\(rawValue)'")))
+                }
+                paneId = uuid
                 continue
             }
             if token == "--workspace" || token == "--tab" || token == "--window" {
@@ -104,7 +134,11 @@ extension RightSidebarRemoteRequest {
         }
 
         guard let action = positional.first?.lowercased() else {
-            return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage", defaultValue: "ERROR: Usage: right_sidebar <toggle|show|hide|focus|set|mode|set-root> [mode|path] [--workspace=<workspace-id>] [--window=<window-id>] [--no-focus]")))
+            return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage", defaultValue: "ERROR: Usage: right_sidebar <toggle|show|hide|focus|set|mode|set-root|open-pane> [mode|path] [--workspace=<workspace-id>] [--window=<window-id>] [--pane=<pane-id>] [--no-focus]")))
+        }
+
+        if paneId != nil, action != "open-pane", action != "open_pane" {
+            return .failure(.init(message: String(localized: "rightSidebar.remote.error.paneOnlyOpenPane", defaultValue: "ERROR: --pane is only valid with right_sidebar open-pane")))
         }
 
         switch action {
@@ -144,6 +178,15 @@ extension RightSidebarRemoteRequest {
             let lowered = rawPath.lowercased()
             let clearsOverride = lowered == "auto" || lowered == "clear"
             return .success(.init(command: .setFilesRoot(clearsOverride ? nil : rawPath), target: target))
+        case "open-pane", "open_pane":
+            guard positional.count == 2 else {
+                return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.openPane", defaultValue: "ERROR: Usage: right_sidebar open-pane <files|find|vault> [--pane=<pane-id>] [--no-focus] [--workspace=<workspace-id>] [--window=<window-id>]")))
+            }
+            let rawPaneMode = positional[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let paneMode = RightSidebarMode.from(cliArgument: rawPaneMode), paneMode.canOpenAsPane else {
+                return .failure(.init(message: String(localized: "rightSidebar.remote.error.unknownPaneMode", defaultValue: "ERROR: Right sidebar mode '\(positional[1])' cannot open as a pane")))
+            }
+            return .success(.init(command: .openPane(paneMode, paneId: paneId, focus: !noFocus), target: target))
         case "set":
             guard positional.count == 2 else {
                 return .failure(.init(message: String(localized: "rightSidebar.remote.error.usage.set", defaultValue: "ERROR: Usage: right_sidebar set <files|find|vault|sessions|feed|dock> [--no-focus] [--workspace=<workspace-id>] [--window=<window-id>]")))

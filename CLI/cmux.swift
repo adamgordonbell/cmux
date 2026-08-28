@@ -16857,12 +16857,18 @@ struct CMUXCLI {
               mode                           Print {"visible":bool,"mode":string}
               set-root <path|auto>           Pin the files panel root to a directory
                                              (in-memory; 'auto' resumes following the shell cwd)
+              open-pane <files|find|vault>   Open the tool as a pane surface and print its
+                                             handles as JSON. Files panes are independently
+                                             rooted, so several can coexist.
               files|find|vault|sessions|feed|dock
                                              Alias for show + set + focus
 
             Flags:
               --workspace <id|ref|index>     Target the window containing a workspace
               --window <id|ref|index>        Target a window
+              --pane <id|ref|index>          With open-pane, which pane to open in
+                                             (default: the focused pane)
+              --focus <true|false>           Whether the new surface takes focus (default true)
               --no-focus                     With set, switch mode without moving focus
 
             Examples:
@@ -16871,6 +16877,7 @@ struct CMUXCLI {
               cmux right-sidebar mode
               cmux right-sidebar set-root ~/sandbox/myproject
               cmux right-sidebar set-root auto
+              cmux right-sidebar open-pane files --pane pane:2 --focus false
             """)
         case "sidebar":
             return String(localized: "cli.sidebar.usage", defaultValue: """
@@ -17281,6 +17288,7 @@ struct CMUXCLI {
         let positional: [String]
         let workspace: String?
         let window: String?
+        let pane: String?
         let noFocus: Bool
     }
 
@@ -17309,13 +17317,27 @@ struct CMUXCLI {
         if let windowId {
             forwardedArgs.append("--window=\(windowId)")
         }
+        // Pane handles accept the same forms move-surface takes — UUID, `pane:N`,
+        // or a bare index — but the v1 `right_sidebar` command has no ref
+        // resolver behind it, so they are resolved to a UUID here.
+        if let paneId = try resolveRightSidebarPaneId(
+            parsed.pane,
+            workspaceId: workspaceId,
+            windowId: windowId,
+            client: client
+        ) {
+            forwardedArgs.append("--pane=\(paneId)")
+        }
 
         let command = (["right_sidebar"] + forwardedArgs)
             .map(shellQuote)
             .joined(separator: " ")
         let response = try sendV1Command(command, client: client)
-        if parsed.positional.first?.lowercased() == "mode" {
+        switch parsed.positional.first?.lowercased() {
+        case "mode", "open-pane":
             print(response)
+        default:
+            break
         }
     }
 
@@ -17498,12 +17520,25 @@ struct CMUXCLI {
         var positional: [String] = []
         var workspace: String?
         var window: String?
+        var pane: String?
         var noFocus = false
         var index = 0
 
         while index < args.count {
             let arg = args[index]
             switch arg {
+            case "--pane":
+                guard index + 1 < args.count else {
+                    throw CLIError(message: String(localized: "cli.rightSidebar.error.paneRequiresValue", defaultValue: "right-sidebar: --pane requires an id"))
+                }
+                pane = args[index + 1]
+                index += 2
+            case "--focus":
+                guard index + 1 < args.count else {
+                    throw CLIError(message: String(localized: "cli.rightSidebar.error.focusRequiresValue", defaultValue: "right-sidebar: --focus requires true or false"))
+                }
+                noFocus = try !rightSidebarCLIBool(args[index + 1])
+                index += 2
             case "--workspace":
                 guard index + 1 < args.count else {
                     throw CLIError(message: String(localized: "cli.rightSidebar.error.workspaceRequiresValue", defaultValue: "right-sidebar: --workspace requires an id"))
@@ -17520,7 +17555,13 @@ struct CMUXCLI {
                 noFocus = true
                 index += 1
             default:
-                if arg.hasPrefix("--workspace=") {
+                if arg.hasPrefix("--pane=") {
+                    pane = String(arg.dropFirst("--pane=".count))
+                    index += 1
+                } else if arg.hasPrefix("--focus=") {
+                    noFocus = try !rightSidebarCLIBool(String(arg.dropFirst("--focus=".count)))
+                    index += 1
+                } else if arg.hasPrefix("--workspace=") {
                     workspace = String(arg.dropFirst("--workspace=".count))
                     index += 1
                 } else if arg.hasPrefix("--window=") {
@@ -17539,13 +17580,29 @@ struct CMUXCLI {
             positional: positional,
             workspace: workspace,
             window: window,
+            pane: pane,
             noFocus: noFocus
         )
+    }
+
+    private func rightSidebarCLIBool(_ raw: String) throws -> Bool {
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "true", "yes", "1":
+            return true
+        case "false", "no", "0":
+            return false
+        default:
+            throw CLIError(message: String(localized: "cli.rightSidebar.error.invalidFocus", defaultValue: "right-sidebar: --focus expects true or false, got '\(raw)'"))
+        }
     }
 
     private func rightSidebarSocketArguments(from parsed: RightSidebarCLIArguments) throws -> [String] {
         guard let action = parsed.positional.first?.lowercased() else {
             throw CLIError(message: String(localized: "cli.rightSidebar.error.missingCommand", defaultValue: "right-sidebar requires a subcommand"))
+        }
+
+        guard parsed.pane == nil || action == "open-pane" else {
+            throw CLIError(message: String(localized: "cli.rightSidebar.error.paneOnlyOpenPane", defaultValue: "right-sidebar: --pane is only valid with open-pane"))
         }
 
         switch action {
@@ -17571,6 +17628,20 @@ struct CMUXCLI {
                 args.append("--no-focus")
             }
             return args
+
+        case "open-pane":
+            guard parsed.positional.count == 2 else {
+                throw CLIError(message: String(localized: "cli.rightSidebar.error.openPaneRequiresMode", defaultValue: "right-sidebar open-pane requires a mode: files, find, or vault"))
+            }
+            let paneMode = parsed.positional[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard isRightSidebarPaneCLIMode(paneMode) else {
+                throw CLIError(message: String(localized: "cli.rightSidebar.error.unknownPaneMode", defaultValue: "right-sidebar open-pane cannot open '\(parsed.positional[1])' as a pane (use files, find, or vault)"))
+            }
+            var openArgs = ["open-pane", normalizedRightSidebarCLIArgument(paneMode)]
+            if parsed.noFocus {
+                openArgs.append("--no-focus")
+            }
+            return openArgs
 
         case "set-root":
             guard parsed.positional.count == 2 else {
@@ -17610,6 +17681,33 @@ struct CMUXCLI {
             }
             return ["set", normalizedRightSidebarCLIArgument(rawAction)]
         }
+    }
+
+    private func resolveRightSidebarPaneId(
+        _ raw: String?,
+        workspaceId: String?,
+        windowId: String?,
+        client: SocketClient
+    ) throws -> String? {
+        guard let normalized = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !normalized.isEmpty else { return nil }
+        var params: [String: Any] = [:]
+        if let workspaceId {
+            params["workspace_id"] = workspaceId
+        }
+        if let windowId {
+            params["window_id"] = windowId
+        }
+        return try resolvedRightSidebarHandleID(
+            normalized,
+            expectedRefKind: "pane",
+            invalidMessage: String(localized: "cli.rightSidebar.error.invalidPane", defaultValue: "Invalid pane handle: \(normalized)"),
+            missingRefMessage: String(localized: "cli.rightSidebar.error.paneRefNotFound", defaultValue: "Pane ref not found"),
+            listMethod: "pane.list",
+            listKey: "panes",
+            listParams: params,
+            client: client
+        )
     }
 
     private func resolveRightSidebarWindowId(_ raw: String?, client: SocketClient) throws -> String? {

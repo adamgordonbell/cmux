@@ -111,6 +111,7 @@ extension TerminalControllerSocketSecurityTests {
 #if DEBUG
         let workspaceId = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         let windowId = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let paneId = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
         let cases: [(String, RightSidebarRemoteRequest)] = [
             (
                 "right_sidebar toggle",
@@ -145,6 +146,21 @@ extension TerminalControllerSocketSecurityTests {
                 RightSidebarRemoteRequest(command: .getState, target: RightSidebarRemoteTarget())
             ),
             (
+                "right_sidebar open-pane files",
+                RightSidebarRemoteRequest(command: .openPane(.files, paneId: nil, focus: true), target: RightSidebarRemoteTarget())
+            ),
+            (
+                "right_sidebar open-pane vault --no-focus",
+                RightSidebarRemoteRequest(command: .openPane(.sessions, paneId: nil, focus: false), target: RightSidebarRemoteTarget())
+            ),
+            (
+                "right_sidebar open-pane find --pane=\(paneId.uuidString) --tab=\(workspaceId.uuidString)",
+                RightSidebarRemoteRequest(
+                    command: .openPane(.find, paneId: paneId, focus: true),
+                    target: RightSidebarRemoteTarget(windowId: nil, workspaceId: workspaceId)
+                )
+            ),
+            (
                 "right_sidebar state --workspace \(workspaceId.uuidString) --window \(windowId.uuidString)",
                 RightSidebarRemoteRequest(command: .getState, target: RightSidebarRemoteTarget(windowId: windowId, workspaceId: workspaceId))
             ),
@@ -164,6 +180,10 @@ extension TerminalControllerSocketSecurityTests {
             ("right_sidebar --bad", "Unknown right sidebar option"),
             ("right_sidebar show --tab not-a-uuid", "Invalid right sidebar --tab id"),
             ("right_sidebar show --window", "--window requires an id"),
+            ("right_sidebar open-pane", "Usage: right_sidebar open-pane"),
+            ("right_sidebar open-pane feed", "cannot open as a pane"),
+            ("right_sidebar open-pane files --pane not-a-uuid", "Invalid right sidebar --pane id"),
+            ("right_sidebar show --pane \(UUID().uuidString)", "--pane is only valid with right_sidebar open-pane"),
         ]
 
         for (line, expectedMessage) in invalidCases {
@@ -189,6 +209,8 @@ extension TerminalControllerSocketSecurityTests {
             ("right_sidebar set find", true),
             ("right_sidebar sessions", true),
             ("right_sidebar set vault --no-focus", false),
+            ("right_sidebar open-pane files", true),
+            ("right_sidebar open-pane files --no-focus", false),
             ("right_sidebar hide", false),
             ("right_sidebar mode", false),
             ("right_sidebar state", false),
@@ -277,7 +299,7 @@ extension TerminalControllerSocketSecurityTests {
         ) {
         case .failure(let message):
             #expect(message.contains("target not found"), Comment(rawValue: message))
-        case .ok, .state:
+        case .ok, .state, .surface:
             Issue.record("Expected targeted toggle without a window to fail")
         }
         #expect(!stateB.isVisible)
@@ -293,7 +315,7 @@ extension TerminalControllerSocketSecurityTests {
         ) {
         case .failure(let message):
             #expect(message.contains("state not available"), Comment(rawValue: message))
-        case .ok, .state:
+        case .ok, .state, .surface:
             Issue.record("Expected explicit target without right-sidebar state to fail")
         }
 
@@ -303,7 +325,7 @@ extension TerminalControllerSocketSecurityTests {
         ) {
         case .failure(let message):
             #expect(message.contains("target not found"), Comment(rawValue: message))
-        case .ok, .state:
+        case .ok, .state, .surface:
             Issue.record("Expected missing workspace target to fail")
         }
     }

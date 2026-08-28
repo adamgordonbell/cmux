@@ -53,8 +53,16 @@ final class MainWindowFocusController {
     private weak var tabManager: TabManager?
     private weak var fileExplorerState: FileExplorerState?
     private weak var rightSidebarHost: RightSidebarKeyboardFocusView?
-    private weak var fileExplorerHost: FileExplorerContainerView?
-    private weak var fileSearchHost: FileExplorerContainerView?
+    /// Every live file-explorer host in this window; the last entry for a mode is
+    /// the active one.
+    ///
+    /// A window can host more than one explorer view at a time — the right
+    /// sidebar plus any number of Files panes — so a single `weak var` per mode
+    /// would let whichever view laid out last silently become "the" host. The
+    /// list keeps them all and picks the active one by recency of focus, so
+    /// keyboard focus lands where the user last was rather than wherever AppKit
+    /// happened to re-run `layout()`.
+    private var fileExplorerHosts: [FileExplorerHostRegistration] = []
     private weak var feedHost: FeedKeyboardFocusView?
     private weak var dockHost: DockKeyboardFocusView?
 
@@ -121,16 +129,59 @@ final class MainWindowFocusController {
     }
 
     func registerFileExplorerHost(_ host: FileExplorerContainerView) {
-        let mode = host.representedRightSidebarMode()
-        switch mode {
-        case .files:
-            fileExplorerHost = host
-        case .find:
-            fileSearchHost = host
-        case .sessions, .feed, .dock, .customSidebar:
-            break
+        pruneFileExplorerHosts()
+        // Re-registration is routine — `layout()` calls this on every pass — so
+        // a host already in the list keeps its place. Only a genuinely new host
+        // takes over the active slot at the end of the list.
+        if !fileExplorerHosts.contains(where: { $0.host === host }) {
+            fileExplorerHosts.append(FileExplorerHostRegistration(host: host))
         }
-        focusRegisteredRightSidebarEndpointIfNeeded(mode: mode)
+        focusRegisteredRightSidebarEndpointIfNeeded(mode: host.representedRightSidebarMode())
+    }
+
+    /// Drops a host that is going away, so a torn-down pane never stays active.
+    func unregisterFileExplorerHost(_ host: FileExplorerContainerView) {
+        fileExplorerHosts.removeAll { $0.host == nil || $0.host === host }
+    }
+
+    /// Makes `host` the one a mode-targeted focus request will reach.
+    private func promoteFileExplorerHost(_ host: FileExplorerContainerView) {
+        guard fileExplorerHosts.last?.host !== host else { return }
+        fileExplorerHosts.removeAll { $0.host == nil || $0.host === host }
+        fileExplorerHosts.append(FileExplorerHostRegistration(host: host))
+    }
+
+    private func pruneFileExplorerHosts() {
+        fileExplorerHosts.removeAll { $0.host == nil }
+    }
+
+#if DEBUG
+    func fileExplorerHostCountForTesting() -> Int {
+        pruneFileExplorerHosts()
+        return fileExplorerHosts.count
+    }
+
+    func activeFileExplorerHostForTesting(mode: RightSidebarMode) -> FileExplorerContainerView? {
+        activeFileExplorerHost(for: mode)
+    }
+#endif
+
+    /// The most-recently-focused live host for `mode`, or the newest registered
+    /// one when none has taken focus yet.
+    private func activeFileExplorerHost(for mode: RightSidebarMode) -> FileExplorerContainerView? {
+        pruneFileExplorerHosts()
+        return fileExplorerHosts.last { $0.host?.representedRightSidebarMode() == mode }?.host
+    }
+
+    /// The host that currently owns `responder`, promoting it to active — the
+    /// responder chain is the only authority on which explorer the user is in.
+    private func fileExplorerHostOwning(_ responder: NSResponder) -> FileExplorerContainerView? {
+        pruneFileExplorerHosts()
+        guard let host = fileExplorerHosts.last(where: { $0.host?.ownsKeyboardFocus(responder) == true })?.host else {
+            return nil
+        }
+        promoteFileExplorerHost(host)
+        return host
     }
 
     func registerFeedHost(_ host: FeedKeyboardFocusView) {
@@ -204,8 +255,7 @@ final class MainWindowFocusController {
         if responder is FeedKeyboardFocusResponder {
             return true
         }
-        if fileExplorerHost?.ownsKeyboardFocus(responder) == true ||
-            fileSearchHost?.ownsKeyboardFocus(responder) == true {
+        if fileExplorerHostOwning(responder) != nil {
             return true
         }
         if feedHost?.ownsKeyboardFocus(responder) == true {
@@ -727,9 +777,9 @@ final class MainWindowFocusController {
     ) -> Bool {
         switch mode {
         case .files:
-            return fileExplorerHost?.focusOutline() == true
+            return activeFileExplorerHost(for: .files)?.focusOutline() == true
         case .find:
-            return fileSearchHost?.focusSearchField() == true
+            return activeFileExplorerHost(for: .find)?.focusSearchField() == true
         case .sessions, .customSidebar:
             return mode == .customSidebar ? focusFallbackRightSidebarHost() : false
         case .feed:
@@ -800,11 +850,8 @@ final class MainWindowFocusController {
         if let host = rightSidebarHost, responder === host {
             return fileExplorerState?.mode ?? rememberedRightSidebarMode
         }
-        if fileExplorerHost?.ownsKeyboardFocus(responder) == true {
-            return .files
-        }
-        if fileSearchHost?.ownsKeyboardFocus(responder) == true {
-            return .find
+        if let host = fileExplorerHostOwning(responder) {
+            return host.representedRightSidebarMode()
         }
         if feedHost?.ownsKeyboardFocus(responder) == true || responder is FeedKeyboardFocusResponder {
             return .feed
@@ -831,4 +878,11 @@ final class MainWindowFocusController {
         }
         return TerminalFocusRequest(workspaceId: workspaceId, panelId: panelId)
     }
+}
+
+/// A weak slot in `MainWindowFocusController`'s explorer-host list. Weak so a
+/// closed pane's view drops out on its own even if teardown never reaches
+/// `unregisterFileExplorerHost`.
+private struct FileExplorerHostRegistration {
+    weak var host: FileExplorerContainerView?
 }

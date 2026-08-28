@@ -469,6 +469,8 @@ class TerminalController {
             return true
         case .setMode(_, let focus):
             return focus
+        case .openPane(_, _, let focus):
+            return focus
         case .hide, .getState, .setFilesRoot:
             return false
         }
@@ -10699,7 +10701,7 @@ class TerminalController {
           report_pr_action <merge|close|reopen|create|checkout|ready|edit|view> [--target=X] [--tab=X] [--panel=Y] - Hint that a PR-affecting command completed in the panel
           report_pwd <path|display-label> [--path=/actual/path] [--tab=X] [--panel=Y] - Report current working directory
           clear_ports [--tab=X] [--panel=Y] - Clear listening ports
-          right_sidebar <toggle|show|hide|focus|set|mode|set-root> [mode|path] [--tab=X] [--window=Y] [--no-focus] - Control right sidebar visibility, mode, focus, and files root
+          right_sidebar <toggle|show|hide|focus|set|mode|set-root|open-pane> [mode|path] [--tab=X] [--window=Y] [--pane=Z] [--no-focus] - Control right sidebar visibility, mode, focus, files root, and tool panes
           sidebar_state [--tab=X] - Dump sidebar metadata
           reset_sidebar [--tab=X] - Clear sidebar metadata
 

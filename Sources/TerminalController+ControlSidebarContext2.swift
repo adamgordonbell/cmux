@@ -460,6 +460,20 @@ extension TerminalController {
             return .ok
         case .state(let state):
             return .state(visible: state.visible, modeRawValue: state.modeRawValue)
+        case .surface(let surface):
+            let refs = v2WorkspacePaneAndSurfaceRefs(
+                workspaceId: surface.workspaceId,
+                paneId: surface.paneId,
+                surfaceId: surface.surfaceId
+            )
+            return .surface(
+                surfaceId: surface.surfaceId.uuidString,
+                surfaceRef: refs.surfaceRef,
+                paneId: surface.paneId?.uuidString,
+                paneRef: refs.paneRef,
+                workspaceId: surface.workspaceId.uuidString,
+                workspaceRef: refs.workspaceRef
+            )
         case .failure(let message):
             return .failure(message: message)
         }

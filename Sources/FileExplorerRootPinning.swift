@@ -8,6 +8,10 @@ import Foundation
 /// observes to re-apply the explorer root — so a menu click and a CLI call are
 /// the same operation and cannot drift apart. Passing `nil` clears the override
 /// and hands the sidebar back to shell-cwd auto-follow.
+///
+/// Files *panes* deliberately do not come through here: each owns its own root
+/// (`RightSidebarToolPanel.setFileExplorerRootOverride`) so retargeting one
+/// leaves the sidebar and every other pane where they were.
 enum FileExplorerRootPinning {
     @MainActor
     static func setRoot(_ path: String?, workspaceId: UUID?) {

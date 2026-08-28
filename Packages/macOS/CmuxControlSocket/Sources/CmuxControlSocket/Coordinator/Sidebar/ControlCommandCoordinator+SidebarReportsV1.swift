@@ -504,6 +504,16 @@ extension ControlCommandCoordinator {
                 "visible": .bool(visible),
                 "mode": .string(modeRawValue),
             ]))
+        case .surface(let surfaceId, let surfaceRef, let paneId, let paneRef, let workspaceId, let workspaceRef):
+            var fields: [String: JSONValue] = [
+                "surface_id": .string(surfaceId),
+                "surface_ref": .string(surfaceRef),
+                "workspace_id": .string(workspaceId),
+                "workspace_ref": .string(workspaceRef),
+            ]
+            if let paneId { fields["pane_id"] = .string(paneId) }
+            if let paneRef { fields["pane_ref"] = .string(paneRef) }
+            return ControlResponseEncoder().encode(.object(fields))
         case .failure(let message):
             return message
         }

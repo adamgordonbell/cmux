@@ -11,6 +11,11 @@ final class RightSidebarToolPanel: Panel, ObservableObject {
 
     @Published private(set) var focusFlashToken: Int = 0
 
+    /// This panel's own files root, independent of the workspace and of every
+    /// other Files pane. `nil` means follow the workspace the way the panel
+    /// always has — a pane opened and never retargeted behaves exactly as before.
+    @Published private(set) var fileExplorerRootOverride: String?
+
     private weak var workspace: Workspace?
     private weak var fileExplorerContainerView: FileExplorerContainerView?
     private weak var sessionIndexFocusAnchorView: RightSidebarToolFocusAnchorView?
@@ -68,6 +73,29 @@ final class RightSidebarToolPanel: Panel, ObservableObject {
 
     func attachFileExplorerContainer(_ container: FileExplorerContainerView?) {
         fileExplorerContainerView = container
+    }
+
+    /// Retargets just this panel. `nil` hands it back to following the workspace.
+    ///
+    /// The global recents list is fed here too: it is a hop-to-a-reference-folder
+    /// MRU, and a folder is no less worth remembering for having been opened in
+    /// a pane rather than the sidebar.
+    func setFileExplorerRootOverride(_ path: String?) {
+        guard let path else {
+            guard fileExplorerRootOverride != nil else { return }
+            fileExplorerRootOverride = nil
+            if let workspace { syncWorkspaceRoot(from: workspace) }
+            return
+        }
+        let expanded = (path as NSString).expandingTildeInPath
+        var isDirectory: ObjCBool = false
+        guard expanded.hasPrefix("/"),
+              FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return }
+        guard fileExplorerRootOverride != expanded else { return }
+        fileExplorerRootOverride = expanded
+        FileExplorerRecentRoots.record(expanded)
+        if let workspace { syncWorkspaceRoot(from: workspace) }
     }
 
     fileprivate func attachSessionIndexFocusAnchor(_ anchor: RightSidebarToolFocusAnchorView?) {
@@ -216,7 +244,10 @@ final class RightSidebarToolPanel: Panel, ObservableObject {
             return
         }
 
-        let directory = workspace.currentDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A pinned pane root wins over the shell cwd; the remote branch above
+        // returns early because a local path means nothing over SSH.
+        let directory = (fileExplorerRootOverride ?? workspace.currentDirectory)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !directory.isEmpty else {
             store.applyWorkspaceRoot(.none)
             return
@@ -271,7 +302,8 @@ struct RightSidebarToolPanelView: View {
                 presentation: .files,
                 placement: .pane,
                 onFocus: requestPanelFocusIfNeeded,
-                onContainerChange: panel.attachFileExplorerContainer
+                onContainerChange: panel.attachFileExplorerContainer,
+                onSetRoot: panel.setFileExplorerRootOverride
             )
         case .find:
             FileExplorerPanelView(
@@ -281,7 +313,8 @@ struct RightSidebarToolPanelView: View {
                 presentation: .find,
                 placement: .pane,
                 onFocus: requestPanelFocusIfNeeded,
-                onContainerChange: panel.attachFileExplorerContainer
+                onContainerChange: panel.attachFileExplorerContainer,
+                onSetRoot: panel.setFileExplorerRootOverride
             )
         case .sessions:
             SessionIndexView(

@@ -93,6 +93,19 @@ the terminal has never heard of. Clicks silently fell through to `NSWorkspace.op
   focused one.
 - **"Set as Root" + a header breadcrumb** — the UI counterpart. Right-click a folder to
   narrow; click the header for any ancestor, or "Follow Shell Directory" to clear.
+- **Files panes are independent trees** — opening Files as a pane used to focus the one
+  that already existed and mirror the sidebar's directory, which made a second one
+  pointless. Now any number can coexist, each with its own root, and the header
+  breadcrumb writes to whichever root the panel it lives in owns. (Previously a
+  breadcrumb click inside a *pane* silently repinned the *sidebar*.) Find and Vault keep
+  the old focus-the-existing-one behavior: they have no per-pane state to tell two copies
+  apart.
+- **`right-sidebar open-pane <files|find|vault>`** — the CLI twin, with `--pane` (any
+  handle form `move-surface` takes) and `--focus`. Prints the new surface's handles as
+  JSON so a wrapper can chain off it.
+- Keyboard focus tracks explorer hosts as an ordered, most-recently-focused registry
+  rather than one slot per mode, so a second Files view can't quietly become the one
+  ⌘-shortcuts reach.
 
 ### Build and dev loop
 

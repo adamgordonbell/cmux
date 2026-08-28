@@ -439,6 +439,17 @@ extension CMUXCLI {
         }
     }
 
+    /// Modes that can exist as a Bonsplit pane, as opposed to only as the
+    /// sidebar's content: Feed and Dock have no pane form.
+    func isRightSidebarPaneCLIMode(_ value: String) -> Bool {
+        switch value.lowercased() {
+        case "files", "find", "vault", "sessions":
+            return true
+        default:
+            return false
+        }
+    }
+
     func normalizedRightSidebarCLIArgument(_ value: String) -> String {
         switch value.lowercased() {
         case "files", "find", "vault", "sessions", "feed", "dock":

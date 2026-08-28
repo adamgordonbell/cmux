@@ -6581,6 +6581,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             requiresWindowFocus = true
         case .setMode(_, let focus):
             requiresWindowFocus = focus
+        case .openPane(_, _, let focus):
+            requiresWindowFocus = focus
         case .toggle, .show, .hide, .getState, .setFilesRoot:
             requiresWindowFocus = false
         }
@@ -6669,6 +6671,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
             workspace.fileExplorerRootOverride = expanded
             return .ok
+        case .openPane(let mode, let paneId, let focus):
+            guard let manager = context?.tabManager ?? tabManager else {
+                return .failure(String(localized: "rightSidebar.remote.error.targetNotFound", defaultValue: "ERROR: Right sidebar target not found"))
+            }
+            let workspace: Workspace?
+            if let workspaceId = target.workspaceId {
+                workspace = manager.tabs.first(where: { $0.id == workspaceId })
+            } else {
+                workspace = manager.selectedTabId.flatMap { id in manager.tabs.first(where: { $0.id == id }) }
+            }
+            guard let workspace else {
+                return .failure(String(localized: "rightSidebar.remote.error.targetNotFound", defaultValue: "ERROR: Right sidebar target not found"))
+            }
+            guard mode.canOpenAsPane else {
+                return .failure(String(localized: "rightSidebar.remote.error.modeNotPaneable", defaultValue: "ERROR: Right sidebar mode '\(mode.rawValue)' cannot open as a pane"))
+            }
+            // No `--pane` means the same default the header button uses: whatever
+            // pane has focus, falling back to the workspace's first pane.
+            let pane: PaneID?
+            if let paneId {
+                pane = workspace.bonsplitController.allPaneIds.first(where: { $0.id == paneId })
+                guard pane != nil else {
+                    return .failure(String(localized: "rightSidebar.remote.error.paneNotFound", defaultValue: "ERROR: Pane not found in the target workspace"))
+                }
+            } else {
+                pane = workspace.bonsplitController.focusedPaneId ?? workspace.bonsplitController.allPaneIds.first
+            }
+            guard let pane else {
+                return .failure(String(localized: "rightSidebar.remote.error.paneNotFound", defaultValue: "ERROR: Pane not found in the target workspace"))
+            }
+            workspace.clearSplitZoom()
+            guard let panel = workspace.newRightSidebarToolSurface(inPane: pane, mode: mode, focus: focus) else {
+                return .failure(String(localized: "rightSidebar.remote.error.openPaneFailed", defaultValue: "ERROR: Failed to open right sidebar pane"))
+            }
+            return .surface(
+                RightSidebarRemoteSurface(
+                    workspaceId: workspace.id,
+                    paneId: workspace.paneId(forPanelId: panel.id)?.id ?? pane.id,
+                    surfaceId: panel.id
+                )
+            )
         case .getState:
             return .state(.init(visible: state.isVisible, modeRawValue: state.rightSidebarRemoteModeRawValue))
         }

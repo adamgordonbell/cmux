@@ -42,6 +42,12 @@ struct FileExplorerPanelView: NSViewRepresentable {
     var placement: FileExplorerPanelPlacement = .rightSidebar
     var onFocus: (() -> Void)?
     var onContainerChange: ((FileExplorerContainerView?) -> Void)?
+    /// Where a root picked from this panel's header breadcrumb goes.
+    ///
+    /// The sidebar leaves this nil and pins the workspace root; a Files pane
+    /// passes its own setter so picking an ancestor retargets that pane instead
+    /// of yanking the sidebar out from under a different view of the tree.
+    var onSetRoot: ((String?) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -50,7 +56,8 @@ struct FileExplorerPanelView: NSViewRepresentable {
             onOpenFilePreview: onOpenFilePreview,
             placement: placement,
             onFocus: onFocus,
-            onContainerChange: onContainerChange
+            onContainerChange: onContainerChange,
+            onSetRoot: onSetRoot
         )
     }
 
@@ -68,6 +75,7 @@ struct FileExplorerPanelView: NSViewRepresentable {
         context.coordinator.placement = placement
         context.coordinator.onFocus = onFocus
         context.coordinator.onContainerChange = onContainerChange
+        context.coordinator.onSetRoot = onSetRoot
         context.coordinator.onContainerChange?(container)
         container.updateShortcutPlacement(placement)
         container.updateHeader(store: store)
@@ -90,6 +98,7 @@ struct FileExplorerPanelView: NSViewRepresentable {
         var placement: FileExplorerPanelPlacement
         var onFocus: (() -> Void)?
         var onContainerChange: ((FileExplorerContainerView?) -> Void)?
+        var onSetRoot: ((String?) -> Void)?
         weak var containerView: FileExplorerContainerView?
         weak var outlineView: NSOutlineView?
         private var lastRootNodeCount: Int = -1
@@ -103,7 +112,8 @@ struct FileExplorerPanelView: NSViewRepresentable {
             onOpenFilePreview: @escaping (String) -> Void,
             placement: FileExplorerPanelPlacement = .rightSidebar,
             onFocus: (() -> Void)? = nil,
-            onContainerChange: ((FileExplorerContainerView?) -> Void)? = nil
+            onContainerChange: ((FileExplorerContainerView?) -> Void)? = nil,
+            onSetRoot: ((String?) -> Void)? = nil
         ) {
             self.store = store
             self.state = state
@@ -111,6 +121,7 @@ struct FileExplorerPanelView: NSViewRepresentable {
             self.placement = placement
             self.onFocus = onFocus
             self.onContainerChange = onContainerChange
+            self.onSetRoot = onSetRoot
             super.init()
             observeStore()
             styleObserver = NotificationCenter.default.addObserver(
@@ -947,6 +958,12 @@ final class FileExplorerContainerView: NSView {
         if newWindow == nil {
             cancelPendingSearchRefresh()
             searchController.cancel(clear: false)
+            // Leaving the window is the last moment we can still name our
+            // coordinator, so hand back the host slot here rather than leaving
+            // a dead entry for a mode-targeted focus request to find.
+            if let window {
+                AppDelegate.shared?.keyboardFocusCoordinator(for: window)?.unregisterFileExplorerHost(self)
+            }
         }
         super.viewWillMove(toWindow: newWindow)
     }
@@ -991,7 +1008,13 @@ final class FileExplorerContainerView: NSView {
         currentRootPath = nextRootPath; currentProviderIsLocal = nextProviderIsLocal
         currentWorkspaceRootIdentity = nextWorkspaceRootIdentity; currentContentRevision = nextContentRevision
         headerView.update(displayPath: store.displayRootPath, rootPath: store.rootPath)
-        headerView.onSelectRoot = { [weak store] path in
+        headerView.onSelectRoot = { [weak coordinator = self.coordinator, weak store] path in
+            // A panel that owns its root handles the pick itself; the sidebar
+            // has no setter of its own and falls through to the workspace pin.
+            if let onSetRoot = coordinator?.onSetRoot {
+                onSetRoot(path)
+                return
+            }
             FileExplorerRootPinning.setRoot(path, workspaceId: store?.workspaceRootIdentity)
         }
         if workspaceRootChanged { cancelPendingSearchRefresh(); pendingSearchRefreshAfterSettled = false; searchController.cancel(clear: true); searchField.stringValue = ""; applySearchSnapshot(.empty) }
