@@ -206,6 +206,8 @@ enum KeyboardShortcutSettings {
         case toggleRightSidebar = "toggleFileExplorer"
         case fileExplorerOpenSelection
         case fileExplorerOpenSelectionFinderAlias
+        // Fork: show/hide a Files tree as a pane tab, next to the previews.
+        case toggleFilesPane
 
         // Panels
         case saveFilePreview, toggleFileEditorWordWrap
@@ -390,6 +392,7 @@ enum KeyboardShortcutSettings {
             case .toggleRightSidebar: return String(localized: "shortcut.toggleRightSidebar.label", defaultValue: "Toggle Right Sidebar")
             case .fileExplorerOpenSelection: return String(localized: "shortcut.fileExplorerOpenSelection.label", defaultValue: "File Explorer: Open Selection")
             case .fileExplorerOpenSelectionFinderAlias: return String(localized: "shortcut.fileExplorerOpenSelectionFinderAlias.label", defaultValue: "File Explorer: Open Selection (Finder Alias)")
+            case .toggleFilesPane: return String(localized: "shortcut.toggleFilesPane.label", defaultValue: "File Explorer: Toggle Files Pane")
             case .saveFilePreview: return String(localized: "shortcut.saveFilePreview.label", defaultValue: "Save File Preview")
             case .toggleFileEditorWordWrap: return String(localized: "shortcut.toggleFileEditorWordWrap.label", defaultValue: "Toggle File Editor Word Wrap")
             case .openBrowser: return String(localized: "shortcut.openBrowser.label", defaultValue: "Open Browser")
@@ -695,6 +698,8 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "\r", command: false, shift: false, option: false, control: false)
             case .fileExplorerOpenSelectionFinderAlias:
                 return StoredShortcut(key: "↓", command: true, shift: false, option: false, control: false)
+            case .toggleFilesPane:
+                return StoredShortcut(key: "b", command: true, shift: false, option: false, control: true)
             case .saveFilePreview:
                 return StoredShortcut(key: "s", command: true, shift: false, option: false, control: false)
             case .toggleFileEditorWordWrap: return StoredShortcut(key: "z", command: false, shift: false, option: true, control: false)

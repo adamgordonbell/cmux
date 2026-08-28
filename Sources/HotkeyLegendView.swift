@@ -42,6 +42,7 @@ struct HotkeyLegendPanel: View {
             (.banishWorkspace, "banish"),
             (.unbanishAllWorkspaces, "unbanish all"),
             (.toggleMarkdownEditMode, "markdown edit/preview (saves)"),
+            (.toggleFilesPane, "files tree as pane (show/hide)"),
             (.toggleHotkeyLegend, "this legend"),
         ]
         return actions.compactMap { action, label in

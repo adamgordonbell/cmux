@@ -16542,6 +16542,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Fork: markdown edit/preview toggle. App-wide (not markdown-scoped):
         // the target is resolved by TabManager, falling back to the visible
         // markdown surface when focus is in a terminal.
+        // Fork: show/hide a Files tree as a pane tab, targeted at the preview
+        // pane rather than at focus, so it never buries a terminal.
+        if matchConfiguredShortcut(event: event, action: .toggleFilesPane) {
+            let routedManager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            return routedManager?.toggleFilesPane() ?? false
+        }
+
         if matchConfiguredShortcut(event: event, action: .toggleMarkdownEditMode) {
             let routedManager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
             return routedManager?.toggleMarkdownEditModeFromCurrentFocus() ?? false

@@ -3575,6 +3575,7 @@
 		D7AB00000000000000000013 /* TabManager+DetachedWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7AB00000000000000000014 /* TabManager+DetachedWorkspace.swift */; };
 		D86840000000000000000015 /* TabManager+DockSessionRestore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D86840000000000000000016 /* TabManager+DockSessionRestore.swift */; };
 		E3309A03 /* TabManager+EqualizeSplits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3309A04 /* TabManager+EqualizeSplits.swift */; };
+		DCDC1000000000000000FA01 /* TabManager+FilesPaneToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDC1000000000000000FA02 /* TabManager+FilesPaneToggle.swift */; };
 		E3B7A400000000000000000B /* TabManager+FocusHistoryHosting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B7A400000000000000000C /* TabManager+FocusHistoryHosting.swift */; };
 		737100000000000000000001 /* TabManager+NonInteractiveClose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737100000000000000000002 /* TabManager+NonInteractiveClose.swift */; };
 		E3B7A4000000000000000009 /* TabManager+NotificationDismissalHosting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B7A400000000000000000A /* TabManager+NotificationDismissalHosting.swift */; };
@@ -7919,6 +7920,7 @@
 		D7AB00000000000000000014 /* TabManager+DetachedWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+DetachedWorkspace.swift"; sourceTree = "<group>"; };
 		D86840000000000000000016 /* TabManager+DockSessionRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+DockSessionRestore.swift"; sourceTree = "<group>"; };
 		E3309A04 /* TabManager+EqualizeSplits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+EqualizeSplits.swift"; sourceTree = "<group>"; };
+		DCDC1000000000000000FA02 /* TabManager+FilesPaneToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+FilesPaneToggle.swift"; sourceTree = "<group>"; };
 		E3B7A400000000000000000C /* TabManager+FocusHistoryHosting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+FocusHistoryHosting.swift"; sourceTree = "<group>"; };
 		737100000000000000000002 /* TabManager+NonInteractiveClose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+NonInteractiveClose.swift"; sourceTree = "<group>"; };
 		E3B7A400000000000000000A /* TabManager+NotificationDismissalHosting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TabManager+NotificationDismissalHosting.swift"; sourceTree = "<group>"; };
@@ -10177,6 +10179,7 @@
 				C548600B0000000000000002 /* TabManager+SessionRestoreIdentity.swift */,
 				A905DFE00000000000000002 /* TabManager+SessionRestorePolicy.swift */,
 				DCDC1000000000000000B016 /* TabManager+BrowserFocus.swift */,
+				DCDC1000000000000000FA02 /* TabManager+FilesPaneToggle.swift */,
 				C5B6A10000000000000000B2 /* TabManager+SidebarGitHosting.swift */,
 				736200000000000000000003 /* TabManager+WorkspaceCustomTitle.swift */,
 				C9A57702C9A57702C9A57702 /* TabManager+WorkspaceGroupRename.swift */,
@@ -16062,6 +16065,7 @@
 				D7AB00000000000000000013 /* TabManager+DetachedWorkspace.swift in Sources */,
 				D86840000000000000000015 /* TabManager+DockSessionRestore.swift in Sources */,
 				E3309A03 /* TabManager+EqualizeSplits.swift in Sources */,
+				DCDC1000000000000000FA01 /* TabManager+FilesPaneToggle.swift in Sources */,
 				E3B7A400000000000000000B /* TabManager+FocusHistoryHosting.swift in Sources */,
 				737100000000000000000001 /* TabManager+NonInteractiveClose.swift in Sources */,
 				E3B7A4000000000000000009 /* TabManager+NotificationDismissalHosting.swift in Sources */,
