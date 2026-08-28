@@ -8,6 +8,16 @@ public enum ControlSidebarRightSidebarResolution: Sendable, Equatable {
     case ok
     /// A `get`-style command returned sidebar state to encode.
     case state(visible: Bool, modeRawValue: String)
+    /// `open-pane` created a surface; the reply carries its handles so a caller
+    /// can chain another command onto the pane it just opened.
+    case surface(
+        surfaceId: String,
+        surfaceRef: String,
+        paneId: String?,
+        paneRef: String?,
+        workspaceId: String,
+        workspaceRef: String
+    )
     /// A parse or apply failure; `message` is the full legacy reply line
     /// (localized app-side where the original was localized).
     case failure(message: String)

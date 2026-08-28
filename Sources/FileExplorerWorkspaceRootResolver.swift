@@ -10,6 +10,8 @@ struct FileExplorerWorkspaceRootResolver {
     let teamScope: @MainActor @Sendable () -> AuthenticatedTeamScope?
     let cloudEnabled: @MainActor @Sendable () -> Bool
     let managedCloudEnabled: @MainActor @Sendable () -> Bool
+    /// Fork: a pinned local root that wins over the shell cwd.
+    let localRootOverride: @MainActor (Workspace) -> String?
 
     init(
         catalog: SurfaceCatalog? = nil,
@@ -17,8 +19,10 @@ struct FileExplorerWorkspaceRootResolver {
             AppDelegate.shared?.auth?.coordinator.authenticatedTeamScope
         },
         cloudEnabled: @escaping @MainActor @Sendable () -> Bool = { CloudMachinesFeature.isEnabled },
-        managedCloudEnabled: @escaping @MainActor @Sendable () -> Bool = { ManagedCloudPolicy.isEnabled }
+        managedCloudEnabled: @escaping @MainActor @Sendable () -> Bool = { ManagedCloudPolicy.isEnabled },
+        localRootOverride: @escaping @MainActor (Workspace) -> String? = { $0.fileExplorerRootOverride }
     ) {
+        self.localRootOverride = localRootOverride
         self.catalog = catalog ?? SurfaceCatalog.shared
         self.teamScope = teamScope
         self.cloudEnabled = cloudEnabled
@@ -116,7 +120,7 @@ struct FileExplorerWorkspaceRootResolver {
         }
         // Fork: a pinned root (`right-sidebar set-root`, "Set as Root") wins over
         // the shell cwd for local workspaces.
-        let pinned = workspace.fileExplorerRootOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let pinned = localRootOverride(workspace)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let path = pinned.isEmpty
             ? workspace.currentDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
             : pinned

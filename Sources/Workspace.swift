@@ -10630,15 +10630,22 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
     ) -> RightSidebarToolPanel? {
         guard !isRetiredFromOwningTabManager else { return nil }
         guard mode.canOpenAsPane, mode.isAvailable() else { return nil }
-        for (existingId, panel) in panels {
-            guard let toolPanel = panel as? RightSidebarToolPanel,
-                  toolPanel.mode == mode else {
-                continue
+        // Files panes are independently rooted, so a second one is a second view
+        // of the tree, not a duplicate — collapsing onto the existing pane would
+        // make side-by-side roots impossible. Find and Vault have no per-pane
+        // state to tell two copies apart, so they still focus the one that
+        // exists rather than piling up identical tabs.
+        if mode != .files {
+            for (existingId, panel) in panels {
+                guard let toolPanel = panel as? RightSidebarToolPanel,
+                      toolPanel.mode == mode else {
+                    continue
+                }
+                if focus {
+                    focusPanel(existingId)
+                }
+                return toolPanel
             }
-            if focus {
-                focusPanel(existingId)
-            }
-            return toolPanel
         }
         return newRightSidebarToolSurface(inPane: paneId, mode: mode, focus: focus)
     }
