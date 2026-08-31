@@ -101,6 +101,12 @@ final class TerminalPanel: Panel, ObservableObject {
     }
 #endif
 
+    /// The surface's tty device name (e.g. "ttys006"), pushed here whenever
+    /// shell integration reports it (the same moments `Workspace.surfaceTTYNames`
+    /// is written). A hint for the viewer-process close-confirmation skip in
+    /// `needsConfirmClose()` — the processes on it are always re-queried fresh.
+    var ttyName: String?
+
     /// Search state for find functionality
     @Published var searchState: TerminalSurface.SearchState? {
         didSet {
@@ -796,7 +802,14 @@ final class TerminalPanel: Panel, ObservableObject {
     }
 
     func needsConfirmClose() -> Bool {
-        surface.needsConfirmClose()
+        guard surface.needsConfirmClose() else { return false }
+        // A surface whose only running processes are read-only viewers
+        // (nvim -R previews, less, man, …) cannot lose work on close — skip
+        // the confirmation so the tab's X button / ⌘W close silently, and the
+        // idle reaper can close them unattended. Plain nvim/vim (no -R) keeps
+        // the confirmation.
+        if TerminalViewerProcessDetector.surfaceIsViewerOnly(ttyName: ttyName) { return false }
+        return true
     }
 
     func shouldPersistScrollbackForSessionSnapshot() -> Bool {

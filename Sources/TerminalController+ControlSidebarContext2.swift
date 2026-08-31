@@ -292,6 +292,7 @@ extension TerminalController {
             tab.pruneSurfaceMetadata(validSurfaceIds: validSurfaceIds)
             guard validSurfaceIds.contains(scope.panelID) else { return }
             tab.surfaceTTYNames[scope.panelID] = ttyName
+            (tab.panels[scope.panelID] as? TerminalPanel)?.ttyName = ttyName
             if tab.isRemoteWorkspace {
                 tab.syncRemotePortScanTTYs()
                 _ = tab.applyPendingRemoteSurfacePortKickIfNeeded(to: scope.panelID)
