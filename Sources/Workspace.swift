@@ -4706,7 +4706,17 @@ final class Workspace: Identifiable, ObservableObject {
     }
 
     func panelNeedsConfirmClose(panelId: UUID, fallbackNeedsConfirmClose: Bool) -> Bool {
-        Self.resolveCloseConfirmation(
+        // Checked before the shell-activity state because a read-only viewer
+        // (`nvim -R`, less, man) IS the running command — `.commandRunning`
+        // would demand a confirmation the surface can never need.
+        // The workspace tty map is written by more paths (snapshot restore
+        // included) than the panel property, so prefer it.
+        let ttyName = surfaceTTYNames[panelId] ?? (panels[panelId] as? TerminalPanel)?.ttyName
+        if panels[panelId] is TerminalPanel,
+           TerminalViewerProcessDetector.surfaceIsViewerOnly(ttyName: ttyName) {
+            return false
+        }
+        return Self.resolveCloseConfirmation(
             shellActivityState: panelShellActivityStates[panelId],
             fallbackNeedsConfirmClose: fallbackNeedsConfirmClose
         )

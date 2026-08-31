@@ -28,10 +28,14 @@ enum TerminalViewerProcessDetector {
     /// Viewers only when launched read-only (`-R`); `view` is vim's alias for it.
     private static let readOnlyFlagEditors: Set<String> = ["nvim", "vim"]
     /// Present in any terminal and carrying no closable work of their own.
-    /// `ps` is listed because the sampler's own `ps` can observe itself.
+    /// `ps` is listed because the sampler's own `ps` can observe itself;
+    /// `sleep` because zsh prompt plugins park one on the controlling tty.
     private static let shellExecutables: Set<String> = [
-        "zsh", "bash", "sh", "fish", "dash", "tcsh", "ksh", "login", "ps"
+        "zsh", "bash", "sh", "fish", "dash", "tcsh", "ksh", "login", "ps", "sleep"
     ]
+    /// Prompt-machinery daemons that share the tty, matched by prefix because
+    /// `ps -o ucomm=` truncates ("gitstatusd-darwin-arm64" → "gitstatusd-darwi").
+    private static let harmlessPrefixes: [String] = ["gitstatusd"]
 
     struct ProcessSample {
         let executableName: String
@@ -42,7 +46,12 @@ enum TerminalViewerProcessDetector {
     /// viewer-only iff at least one non-shell process exists and every
     /// non-shell process is a viewer.
     static func isViewerOnly(_ samples: [ProcessSample]) -> Bool {
-        let nonShell = samples.filter { !shellExecutables.contains($0.executableName.lowercased()) }
+        let nonShell = samples.filter { sample in
+            let name = sample.executableName.lowercased()
+            if shellExecutables.contains(name) { return false }
+            if harmlessPrefixes.contains(where: { name.hasPrefix($0) }) { return false }
+            return true
+        }
         guard !nonShell.isEmpty else { return false }
         return nonShell.allSatisfy { sample in
             let name = sample.executableName.lowercased()
