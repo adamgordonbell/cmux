@@ -105,6 +105,7 @@ extension Workspace {
             invalidateReportedSurfaceTTYRuntime(panelId: panelId)
             return
         }
+        terminal.ttyName = ttyName  // Fork: the viewer close-confirm skip reads the panel's TTY.
         surfaceRegistry.surfaceTTYDevices[panelId] = CmuxTopProcessSnapshot.deviceIdentifier(forTTYName: ttyName)
         surfaceRegistry.runtimeReportedTTYSurfaceIDs.insert(panelId)
         surfaceRegistry.runtimeReportedTTYSurfaceGenerations[panelId] =
