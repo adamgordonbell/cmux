@@ -1069,6 +1069,13 @@ struct MarkdownWebRenderer: NSViewRepresentable {
                     decisionHandler(.allow)
                     return
                 }
+                if navigationAction.modifierFlags.contains(.command) {
+                    // ⌘-click: bypass the in-app browser and hand the link
+                    // to the system default browser.
+                    NSWorkspace.shared.open(url)
+                    decisionHandler(.cancel)
+                    return
+                }
                 handleExternalLink(url)
                 decisionHandler(.cancel)
                 return
