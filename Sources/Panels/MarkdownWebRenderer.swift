@@ -11,6 +11,9 @@ struct MarkdownWebRenderer: NSViewRepresentable {
     let markdown: String
     let theme: MarkdownWebTheme
     let backgroundColor: NSColor
+    /// Whether this renderer is the layer actually shown (tab selected in its
+    /// pane, preview mode). Also drives the fork's orphaned-webview watchdog: a
+    /// *visible* panel whose webview has no window is a hosting failure.
     let isVisibleInUI: Bool
     let panelId: UUID
     let workspaceId: UUID
@@ -23,12 +26,6 @@ struct MarkdownWebRenderer: NSViewRepresentable {
     /// Maximum content column width, in CSS pixels.
     let maxContentWidth: Double
     let session: MarkdownRendererSession
-    /// Whether this renderer is the layer actually shown (tab selected in its
-    /// pane, preview mode). Drives the orphaned-webview watchdog: a *visible*
-    /// panel whose webview has no window is a hosting failure, whereas a
-    /// hidden tab's webview legitimately leaves the window (SwiftUI culls
-    /// zero-opacity platform views).
-    let isVisibleInUI: Bool
     /// Asks the hosting SwiftUI view to rebuild this representable (bump its
     /// `.id`), which re-runs `makeNSView` and re-adopts the session-retained
     /// webview into a live host. The recovery for an orphaned webview.

@@ -91,7 +91,6 @@ struct MarkdownPanelView: View {
                 fontFamily: panel.fontFamily,
                 maxContentWidth: panel.maxContentWidth,
                 session: panel.rendererSession,
-                isVisibleInUI: isVisibleInUI && panel.displayMode == .preview,
                 onRequestRehost: { webViewRehostGeneration &+= 1 },
                 onRequestPanelFocus: onRequestPanelFocus,
                 onViewAttachedToWindow: { [weak panel] in
