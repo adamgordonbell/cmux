@@ -93,7 +93,8 @@ extension KeyboardShortcutSettings.Action {
              .simulatorToggleAppearance,
              .simulatorToggleSoftwareKeyboard,
              .diffViewerNextFile, .diffViewerPreviousFile,
-             .diffViewerNextHunk, .diffViewerPreviousHunk, .diffViewerToggleViewed:
+             .diffViewerNextHunk, .diffViewerPreviousHunk, .diffViewerToggleViewed,
+             .toggleMarkdownEditMode:  // Fork: acts on the focused markdown panel.
             .focusResolved
 
         case .openSettings, .openTeamPicker, .reloadConfiguration,
@@ -138,7 +139,10 @@ extension KeyboardShortcutSettings.Action {
              .canvasDistributeVertically,
              .toggleRightSidebar,
              .findInDirectory,
-             .openDiffViewer:
+             .openDiffViewer,
+             // Fork: slots, banish, legend and the Files pane target workspace/sidebar state.
+             .slotSelect, .slotSelectJot, .nukeWorkspace, .banishWorkspace,
+             .unbanishAllWorkspaces, .toggleHotkeyLegend, .toggleFilesPane:
             .mainContainer
         }
     }
