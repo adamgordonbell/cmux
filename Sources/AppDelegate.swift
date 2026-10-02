@@ -7839,7 +7839,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let target = RightSidebarRemoteTarget(windowId: context.windowId)
         let result = applyRightSidebarRemoteCommand(.setMode(.machines, focus: true), target: target)
         switch result {
-        case .ok, .state:
+        case .ok, .state, .surface:  // Fork: `.surface` is open-pane's success shape.
             registry.reveal(instance: instance, windowID: context.windowId)
         case .failure:
             break

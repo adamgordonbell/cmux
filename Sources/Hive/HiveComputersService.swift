@@ -181,7 +181,7 @@ final class HiveComputersService {
         switch result {
         case .failure(let message):
             error = message
-        case .ok, .state:
+        case .ok, .state, .surface:  // Fork: open-pane's success shape.
             error = nil
         }
         publish()
