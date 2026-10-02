@@ -241,6 +241,16 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Hashable, SettingCod
     case simulatorToggleAppearance
     /// Toggles the software keyboard in the focused Simulator pane.
     case simulatorToggleSoftwareKeyboard
+
+    // MARK: Fork — metadata in ShortcutAction+Fork.swift
+    case slotSelect
+    case slotSelectJot
+    case nukeWorkspace
+    case banishWorkspace
+    case unbanishAllWorkspaces
+    case toggleHotkeyLegend
+    case toggleFilesPane
+    case toggleMarkdownEditMode
 }
 
 extension ShortcutAction {
@@ -255,7 +265,7 @@ extension ShortcutAction {
     /// range. All other actions match a single concrete keystroke.
     public var usesNumberedDigitMatching: Bool {
         switch self {
-        case .selectSurfaceByNumber, .selectWorkspaceByNumber:
+        case .selectSurfaceByNumber, .selectWorkspaceByNumber, .slotSelect:
             return true
         default:
             return false

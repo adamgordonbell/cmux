@@ -6,6 +6,7 @@ struct ShortcutActionNumberedDigitTests {
     @Test func onlyNumberedSelectionActionsUseDigitMatching() {
         for action in ShortcutAction.allCases {
             let expected = action == .selectSurfaceByNumber || action == .selectWorkspaceByNumber
+                || action == .slotSelect  // Fork: workspace slots bind ⌘1…9 as one family.
             #expect(
                 action.usesNumberedDigitMatching == expected,
                 "\(action) usesNumberedDigitMatching should be \(expected)"

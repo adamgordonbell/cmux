@@ -67,6 +67,9 @@ extension ShortcutAction {
 
     private var builtInDefaultStroke: ShortcutStroke? {
         switch self {
+        case .slotSelect, .slotSelectJot, .nukeWorkspace, .banishWorkspace,
+             .unbanishAllWorkspaces, .toggleHotkeyLegend, .toggleFilesPane,
+             .toggleMarkdownEditMode: return forkDefaultStroke
         case .openSettings: return ShortcutStroke(key: ",", command: true)
         case .openTeamPicker: return ShortcutStroke(key: "t", command: true, shift: true, option: true)
         case .reloadConfiguration: return ShortcutStroke(key: ",", command: true, shift: true)

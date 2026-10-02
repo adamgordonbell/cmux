@@ -4,6 +4,9 @@ extension ShortcutAction {
     /// User-facing display name shown in the Settings UI.
     public var displayName: String {
         switch self {
+        case .slotSelect, .slotSelectJot, .nukeWorkspace, .banishWorkspace,
+             .unbanishAllWorkspaces, .toggleHotkeyLegend, .toggleFilesPane,
+             .toggleMarkdownEditMode: return forkDisplayName
         case .openSettings: return "Settings…"
         case .openTeamPicker:
             return String(localized: "shortcut.openTeamPicker.label", defaultValue: "Open Team Picker")

@@ -2,6 +2,9 @@ extension ShortcutAction {
     /// Which group this action belongs to in the settings pane.
     public var group: Group {
         switch self {
+        case .slotSelect, .slotSelectJot, .nukeWorkspace, .banishWorkspace,
+             .unbanishAllWorkspaces, .toggleHotkeyLegend, .toggleFilesPane,
+             .toggleMarkdownEditMode: return forkGroup
         case .openSettings, .openTeamPicker, .reloadConfiguration, .showHideAllWindows, .globalSearch,
              .newWindow, .closeWindow, .toggleFullScreen, .quit:
             return .app
