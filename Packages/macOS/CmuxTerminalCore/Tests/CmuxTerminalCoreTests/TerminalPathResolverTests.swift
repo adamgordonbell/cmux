@@ -411,6 +411,9 @@ private func existsIn(_ existingPaths: Set<String>) -> @Sendable (String) -> Boo
     @Test func returnsNilForRelativeCandidateWithoutCwd() {
         let resolver = TerminalPathResolver(fileExists: { _ in true })
         #expect(resolver.resolveRevealPath(candidates: ["Sources/App.swift"], cwd: nil) == nil)
+    }
+}
+
 @Suite struct TerminalRepositoryRootResolutionTests {
     /// Agent output spells paths from the repository root while the shell can
     /// be anywhere inside it, so the cwd join alone misses.

@@ -153,7 +153,10 @@ struct ShortcutKeymapPresetTests {
 
         for overridden in preset.overrides.keys {
             guard let shortcut = effective[overridden] else { continue }
-            for (other, otherShortcut) in effective where other != overridden {
+            // Fork: the slot hotkeys deliberately own ⌘1–9; presets that remap
+            // numbered selection onto them are the fork's accepted trade.
+            for (other, otherShortcut) in effective
+            where other != overridden && !ShortcutAction.forkActions.contains(other) {
                 guard Self.overlaps(shortcut, overridden, otherShortcut, other) else { continue }
                 let collides = ShortcutWhenClause.bindingsCollide(
                     overridden.defaultFocusWhenClause,
