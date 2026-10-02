@@ -19,6 +19,17 @@
 #
 # Overrides: CMUX_ZIG pins the binary, CMUX_ZIG_SDKROOT pins the SDK.
 
+# Ghostty's manifest is the source of truth for the version (it moved 0.15.2 ->
+# 0.16.0 upstream); 0.15.2 is only the fallback when the manifest can't be read.
+if [[ -z "${ZIG_REQUIRED:-}" ]]; then
+  _zig_toolchain_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -f "$_zig_toolchain_dir/ghostty-zig-version.sh" ]]; then
+    # shellcheck source=scripts/ghostty-zig-version.sh
+    source "$_zig_toolchain_dir/ghostty-zig-version.sh"
+    ZIG_REQUIRED="$(ghostty_minimum_zig_version "$_zig_toolchain_dir/.." 2>/dev/null || true)"
+  fi
+  unset _zig_toolchain_dir
+fi
 ZIG_REQUIRED="${ZIG_REQUIRED:-0.15.2}"
 
 zig_toolchain_version_ok() {
