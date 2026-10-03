@@ -436,7 +436,6 @@ final class MarkdownPanelTests: XCTestCase {
             fontFamily: MarkdownFontFamily.systemDefault,
             maxContentWidth: MarkdownMaxWidthSettings.defaultCSSPixels,
             session: session,
-            isVisibleInUI: true,
             onRequestRehost: {},
             onRequestPanelFocus: {}
         )
@@ -454,7 +453,6 @@ final class MarkdownPanelTests: XCTestCase {
             fontFamily: MarkdownFontFamily.systemDefault,
             maxContentWidth: MarkdownMaxWidthSettings.defaultCSSPixels,
             session: session,
-            isVisibleInUI: true,
             onRequestRehost: {},
             onRequestPanelFocus: {}
         )
