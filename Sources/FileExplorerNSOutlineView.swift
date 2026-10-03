@@ -95,6 +95,14 @@ final class FileExplorerNSOutlineView: NSOutlineView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Fork: ⌘R re-lists the tree. Rename Tab's ⌘R is already off while the
+        // sidebar has focus, so this only shadows it inside the Files tree.
+        if window?.firstResponder === self,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "r" {
+            fileExplorerCoordinator?.store.refresh()
+            return true
+        }
         if quickSearchActive,
            RightSidebarKeyboardNavigation.isPlainPrintableText(event),
            handleQuickSearchKey(event) {

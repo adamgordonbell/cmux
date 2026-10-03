@@ -80,3 +80,25 @@ enum FileExplorerDoubleClickActionSettings {
         }
     }
 }
+
+/// Fork: what double-clicking a FOLDER in the file explorer does.
+///
+/// ``FileExplorerDoubleClickAction`` only covers files; folders always toggled.
+/// `setRoot` makes the folder the tree's root, the way Finder steps into a
+/// folder (the header breadcrumb steps back out). Return still toggles, and
+/// remote trees always toggle since their root follows the remote shell.
+enum FileExplorerFolderDoubleClickAction: String, CaseIterable, Sendable {
+    /// Expand or collapse in place (upstream behavior).
+    case toggle
+    /// Make the folder the tree's root.
+    case setRoot
+}
+
+enum FileExplorerFolderDoubleClickSettings {
+    static let key = "fileExplorerFolderDoubleClickAction"
+    static let defaultValue: FileExplorerFolderDoubleClickAction = .setRoot
+
+    static func resolvedAction(defaults: UserDefaults = .standard) -> FileExplorerFolderDoubleClickAction {
+        defaults.string(forKey: key).flatMap(FileExplorerFolderDoubleClickAction.init(rawValue:)) ?? defaultValue
+    }
+}

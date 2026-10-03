@@ -81,6 +81,12 @@ extension CmuxSettingsFileStore {
         } else if section.keys.contains("doubleClickAction") {
             logInvalid("fileExplorer.doubleClickAction", sourcePath: sourcePath)
         }
+        if let raw = jsonString(section["folderDoubleClickAction"]),
+           let action = FileExplorerFolderDoubleClickAction(rawValue: raw) {
+            snapshot.managedUserDefaults[FileExplorerFolderDoubleClickSettings.key] = .string(action.rawValue)
+        } else if section.keys.contains("folderDoubleClickAction") {
+            logInvalid("fileExplorer.folderDoubleClickAction", sourcePath: sourcePath)
+        }
     }
 
     /// `agentMessages.enabled`, the app-wide switch for agent messages.

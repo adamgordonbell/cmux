@@ -838,6 +838,17 @@ struct FileExplorerPanelView: NSViewRepresentable {
         @MainActor
         @objc func handleDoubleClick(_ sender: NSOutlineView) {
             let row = sender.clickedRow >= 0 ? sender.clickedRow : sender.selectedRow
+            // Fork: like Finder, double-clicking a folder can step into it.
+            // Return keeps expand/collapse; only the mouse gesture retargets.
+            if FileExplorerFolderDoubleClickSettings.resolvedAction() == .setRoot,
+               store.provider is LocalFileExplorerProvider,
+               row >= 0,
+               let node = sender.item(atRow: row) as? FileExplorerNode,
+               node.isDirectory,
+               node.resourceContextID == nil || node.resourceContextID == store.resourceContextID {
+                setRoot(node.path)
+                return
+            }
             openNode(in: sender, at: row)
         }
 
@@ -848,7 +859,15 @@ struct FileExplorerPanelView: NSViewRepresentable {
             guard let outlineView else { return }
             let clickedRow = outlineView.clickedRow
             guard clickedRow >= 0,
-                  let node = outlineView.item(atRow: clickedRow) as? FileExplorerNode else { return }
+                  let node = outlineView.item(atRow: clickedRow) as? FileExplorerNode else {
+                // Right-click on empty space below the rows.
+                if !store.rootPath.isEmpty { menu.addItem(makeRefreshMenuItem()) }
+                return
+            }
+            defer {
+                menu.addItem(.separator())
+                menu.addItem(makeRefreshMenuItem())
+            }
 
             let isLocal = store.provider is LocalFileExplorerProvider
 
@@ -926,7 +945,34 @@ struct FileExplorerPanelView: NSViewRepresentable {
         @MainActor
         @objc private func contextMenuSetAsRoot(_ sender: NSMenuItem) {
             guard let node = sender.representedObject as? FileExplorerNode else { return }
-            FileExplorerRootPinning.setRoot(node.path, workspaceId: store.workspaceRootIdentity)
+            setRoot(node.path)
+        }
+
+        /// Retargets this tree. A pane owns its root and handles the pick
+        /// itself; the sidebar falls through to the workspace pin.
+        @MainActor
+        func setRoot(_ path: String?) {
+            if let onSetRoot {
+                onSetRoot(path)
+                return
+            }
+            FileExplorerRootPinning.setRoot(path, workspaceId: store.workspaceRootIdentity)
+        }
+
+        private func makeRefreshMenuItem() -> NSMenuItem {
+            let item = NSMenuItem(
+                title: String(localized: "fileExplorer.contextMenu.refresh", defaultValue: "Refresh"),
+                action: #selector(contextMenuRefresh(_:)),
+                keyEquivalent: "r"
+            )
+            item.keyEquivalentModifierMask = .command
+            item.target = self
+            return item
+        }
+
+        @MainActor
+        @objc private func contextMenuRefresh(_ sender: NSMenuItem) {
+            store.refresh()
         }
 
         @objc private func contextMenuCopyPath(_ sender: NSMenuItem) {
@@ -1308,15 +1354,10 @@ final class FileExplorerContainerView: NSView {
         currentResourceContextID = store.resourceContextID
         currentWorkspaceRootIdentity = nextWorkspaceRootIdentity; currentContentRevision = nextContentRevision
         headerView.update(displayPath: store.displayRootPath, rootPath: store.rootPath,
-            retry: store.provider is CloudVMFileExplorerProvider ? { [weak store] in store?.retryRemoteRoot() } : nil)
-        headerView.onSelectRoot = { [weak coordinator = self.coordinator, weak store] path in
-            // A panel that owns its root handles the pick itself; the sidebar
-            // has no setter of its own and falls through to the workspace pin.
-            if let onSetRoot = coordinator?.onSetRoot {
-                onSetRoot(path)
-                return
-            }
-            FileExplorerRootPinning.setRoot(path, workspaceId: store?.workspaceRootIdentity)
+            retry: store.provider is CloudVMFileExplorerProvider ? { [weak store] in store?.retryRemoteRoot() } : nil,
+            refresh: { [weak store] in store?.refresh() })
+        headerView.onSelectRoot = { [weak coordinator = self.coordinator] path in
+            coordinator?.setRoot(path)
         }
         if workspaceRootChanged { cancelPendingSearchRefresh(); pendingSearchRefreshAfterSettled = false; searchController.cancel(clear: true); searchField.stringValue = ""; applySearchSnapshot(.empty) }
         if searchScopeChanged {

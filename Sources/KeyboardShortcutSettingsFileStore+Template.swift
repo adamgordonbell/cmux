@@ -273,6 +273,7 @@ extension CmuxSettingsFileStore {
             [
                 "fileExplorer": [
                     "doubleClickAction": FileExplorerDoubleClickActionSettings.defaultValue.rawValue,
+                    "folderDoubleClickAction": FileExplorerFolderDoubleClickSettings.defaultValue.rawValue,
                 ],
             ],
             [

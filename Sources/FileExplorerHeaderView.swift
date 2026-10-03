@@ -12,6 +12,7 @@ final class FileExplorerHeaderView: NSView {
     private let iconView = CmuxResolvedIconImageView()
     private let retryButton = NSButton()
     private var retry: (() -> Void)?
+    private var refresh: (() -> Void)?
     private let pathLabel = NSTextField(labelWithString: "")
     private let chevronView = CmuxResolvedIconImageView()
     private var heightConstraint: NSLayoutConstraint?
@@ -181,11 +182,26 @@ final class FileExplorerHeaderView: NSView {
         heightConstraint?.constant = RightSidebarChromeMetrics.secondaryBarHeight
     }
 
-    @objc private func retryFiles() { retry?() }
+    @objc private func retryFiles() { (retry ?? refresh)?() }
 
-    func update(displayPath: String, rootPath: String, retry: (() -> Void)? = nil) {
+    /// `retry` (Cloud) wins over `refresh` for the one trailing button; with
+    /// neither the button hides.
+    func update(
+        displayPath: String,
+        rootPath: String,
+        retry: (() -> Void)? = nil,
+        refresh: (() -> Void)? = nil
+    ) {
         self.retry = retry
-        retryButton.isHidden = retry == nil
+        self.refresh = refresh
+        retryButton.isHidden = retry == nil && (refresh == nil || rootPath.isEmpty)
+        let toolTip = retry != nil
+            ? String(localized: "common.retry", defaultValue: "Retry")
+            : String(localized: "fileExplorer.header.refresh", defaultValue: "Refresh")
+        if retryButton.toolTip != toolTip {
+            retryButton.toolTip = toolTip
+            retryButton.setAccessibilityLabel(toolTip)
+        }
         guard self.displayPath != displayPath || self.rootPath != rootPath else { return }
         self.displayPath = displayPath
         self.rootPath = rootPath
