@@ -287,6 +287,7 @@ struct PanelFilePathHeader<TrailingContent: View>: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .copyOnlyTextSelection(for: filePath)
+                .copyFilePathOnClick(filePath)
             Spacer(minLength: 8)
             trailingContent()
         }
